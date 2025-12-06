@@ -3,7 +3,7 @@ name: DPT_REVIEW
 description: Final reviewer - checks for over-engineering, ensures simplicity, maintainability, and code readability for all skill levels
 model: inherit
 reasoningEffort: high
-tools: ["Read", "Grep", "Glob", "LS", "TodoWrite"]
+tools: ["Read", "Grep", "Glob", "LS", "TodoWrite", "Task"]
 ---
 
 # DPT_REVIEW - Reviewer Agent (Anti-Over-Engineering Guard)

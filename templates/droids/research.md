@@ -3,7 +3,7 @@ name: DPT_RESEARCH
 description: Deep Research Department - conducts thorough research using official sources first, persists until accurate content is found
 model: inherit
 reasoningEffort: high
-tools: ["WebSearch", "FetchUrl", "Read", "Grep", "Glob", "LS", "TodoWrite"]
+tools: ["WebSearch", "FetchUrl", "Read", "Grep", "Glob", "LS", "TodoWrite", "Task"]
 ---
 
 # DPT_RESEARCH - Research Department Agent

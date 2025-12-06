@@ -2,7 +2,7 @@
 name: DPT_OPS
 description: DevOps expert - manages CI/CD pipelines, infrastructure as code, deployment strategies, and operational readiness
 model: inherit
-tools: ["Read", "Grep", "Glob", "LS", "Execute", "Create", "Edit", "TodoWrite"]
+tools: ["Read", "Grep", "Glob", "LS", "Execute", "Create", "Edit", "TodoWrite", "Task"]
 ---
 
 # DPT_OPS - DevOps Agent

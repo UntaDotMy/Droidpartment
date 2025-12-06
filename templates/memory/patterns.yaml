@@ -1,0 +1,17 @@
+# GLOBAL PATTERNS - Universal Truths
+# Patterns discovered across multiple projects
+# Location: ~/.factory/memory/patterns.yaml
+#
+# When same lesson appears 3+ times across projects,
+# it becomes a pattern (consolidated knowledge)
+
+patterns: []
+
+# Example (auto-generated after pattern discovery):
+# - id: pattern_001
+#   timestamp: 2024-12-06T15:00:00
+#   pattern: "Database timeouts usually from pool exhaustion, not slow queries"
+#   evidence_count: 5                 # Seen in 5 projects
+#   projects: ["app-a", "app-b", "app-c", "app-d", "app-e"]
+#   tags: [database, timeout, pool]
+#   confidence: high                  # High confidence from evidence

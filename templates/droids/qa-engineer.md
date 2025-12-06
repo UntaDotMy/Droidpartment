@@ -2,7 +2,7 @@
 name: DPT_QA
 description: Testing expert - designs test strategies, writes test cases, validates coverage, ensures quality through comprehensive testing
 model: inherit
-tools: ["Read", "Grep", "Glob", "LS", "Create", "Edit", "Execute", "TodoWrite"]
+tools: ["Read", "Grep", "Glob", "LS", "Create", "Edit", "Execute", "TodoWrite", "Task"]
 ---
 
 # DPT_QA - QA Engineer Agent

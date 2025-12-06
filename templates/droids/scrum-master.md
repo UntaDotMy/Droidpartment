@@ -2,7 +2,7 @@
 name: DPT_SCRUM
 description: Task orchestrator - decomposes complex work into sub-tasks, creates execution DAG, coordinates agent workflow
 model: inherit
-tools: ["Read", "Grep", "Glob", "LS", "TodoWrite"]
+tools: ["Read", "Grep", "Glob", "LS", "TodoWrite", "Task"]
 ---
 
 # DPT_SCRUM - Scrum Master Agent

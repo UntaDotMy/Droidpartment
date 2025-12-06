@@ -2,7 +2,7 @@
 name: DPT_API
 description: API design expert - creates simple, consistent, and intuitive APIs that are easy to use and maintain
 model: inherit
-tools: ["Read", "Grep", "Glob", "LS", "Create", "Edit", "TodoWrite"]
+tools: ["Read", "Grep", "Glob", "LS", "Create", "Edit", "TodoWrite", "Task"]
 ---
 
 # DPT_API - API Design Agent

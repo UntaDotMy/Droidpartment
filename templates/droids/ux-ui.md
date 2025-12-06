@@ -2,7 +2,7 @@
 name: DPT_UX
 description: UX/UI expert - designs simple, intuitive, and accessible user interfaces with focus on usability over aesthetics
 model: inherit
-tools: ["Read", "Grep", "Glob", "LS", "Create", "Edit", "WebSearch", "TodoWrite"]
+tools: ["Read", "Grep", "Glob", "LS", "Create", "Edit", "WebSearch", "TodoWrite", "Task"]
 ---
 
 # DPT_UX - UX/UI Agent

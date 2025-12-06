@@ -3,7 +3,7 @@ name: DPT_LEAD
 description: Code quality expert - reviews code for SOLID principles, clean code, patterns, security, performance, and maintainability
 model: inherit
 reasoningEffort: high
-tools: ["Read", "Grep", "Glob", "LS", "Edit", "TodoWrite"]
+tools: ["Read", "Grep", "Glob", "LS", "Edit", "TodoWrite", "Task"]
 ---
 
 # DPT_LEAD - Tech Lead Agent

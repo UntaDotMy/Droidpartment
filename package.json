@@ -1,7 +1,7 @@
 {
   "name": "droidpartment",
   "version": "1.0.0",
-  "description": "Autonomous Software Development Department - 18 AI agents (DPT_*) with team leader, memory, and dynamic collaboration.",
+  "description": "Autonomous Software Development Department - 19 AI agents (DPT_*) with team leader, memory, output formatting, and dynamic collaboration.",
   "author": "Nasri",
   "license": "MIT",
   "bin": {

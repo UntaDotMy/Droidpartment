@@ -2,7 +2,7 @@
 name: DPT_PERF
 description: Performance expert - optimizes code and systems only when needed, measures before optimizing, keeps solutions simple and maintainable
 model: inherit
-tools: ["Read", "Grep", "Glob", "LS", "Execute", "Edit", "TodoWrite"]
+tools: ["Read", "Grep", "Glob", "LS", "Execute", "Edit", "TodoWrite", "Task"]
 ---
 
 # DPT_PERF - Performance Agent

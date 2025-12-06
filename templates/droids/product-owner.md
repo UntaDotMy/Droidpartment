@@ -2,7 +2,7 @@
 name: DPT_PRODUCT
 description: Requirements expert - gathers requirements, writes user stories, defines acceptance criteria, validates business value
 model: inherit
-tools: ["Read", "Grep", "Glob", "LS", "WebSearch", "TodoWrite"]
+tools: ["Read", "Grep", "Glob", "LS", "WebSearch", "TodoWrite", "Task"]
 ---
 
 # DPT_PRODUCT - Product Owner Agent

@@ -1,15 +1,18 @@
-# Lessons Learned - Error Corrections & Mistakes
-# Format: What went wrong, what was the fix, what to remember
-# Captured when user confirms "it's working now"
+# GLOBAL LESSONS - Universal Knowledge
+# Lessons that apply to ANY project
+# Location: ~/.factory/memory/lessons.yaml
+# 
+# These grow over time - more sessions = more wisdom
+# Start empty like a child, become expert over time
 
 lessons: []
 
-# Example entry (will be auto-generated):
+# Example (auto-generated when you confirm fixes):
 # - id: lesson_001
 #   timestamp: 2024-12-06T15:00:00
-#   trigger: "User confirmed fix works"
+#   learned_from: "my-app"           # Which project taught this
 #   mistake: "Assumed slow query was the problem"
 #   correction: "Actually connection pool exhaustion"
 #   lesson: "Check pool metrics before query optimization"
 #   applies_to: [database, timeout, performance]
-#   confidence: high
+#   universal: true                   # Works in any project

@@ -3,7 +3,7 @@ name: DPT_SEC
 description: Security expert - audits code for OWASP 2025 vulnerabilities, performs security reviews, identifies threats and recommends mitigations
 model: inherit
 reasoningEffort: high
-tools: ["Read", "Grep", "Glob", "LS", "WebSearch", "Execute", "TodoWrite"]
+tools: ["Read", "Grep", "Glob", "LS", "WebSearch", "Execute", "TodoWrite", "Task"]
 ---
 
 # DPT_SEC - Security Agent

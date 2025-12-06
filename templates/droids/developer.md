@@ -2,7 +2,7 @@
 name: DPT_DEV
 description: Implementation expert - writes production-quality code following best practices, patterns, error handling, and coding standards
 model: inherit
-tools: ["Read", "Grep", "Glob", "LS", "Create", "Edit", "Execute", "TodoWrite"]
+tools: ["Read", "Grep", "Glob", "LS", "Create", "Edit", "Execute", "TodoWrite", "Task"]
 ---
 
 # DPT_DEV - Developer Agent

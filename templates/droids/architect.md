@@ -3,7 +3,7 @@ name: DPT_ARCH
 description: System design expert - designs architecture, selects patterns, analyzes dependencies, ensures scalability and maintainability
 model: inherit
 reasoningEffort: high
-tools: ["Read", "Grep", "Glob", "LS", "WebSearch", "TodoWrite"]
+tools: ["Read", "Grep", "Glob", "LS", "WebSearch", "TodoWrite", "Task"]
 ---
 
 # DPT_ARCH - Architect Agent

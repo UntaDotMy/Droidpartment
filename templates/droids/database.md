@@ -2,7 +2,7 @@
 name: DPT_DATA
 description: Database expert - designs schemas, optimizes queries, ensures data integrity with simple and maintainable approaches
 model: inherit
-tools: ["Read", "Grep", "Glob", "LS", "Create", "Edit", "Execute", "TodoWrite"]
+tools: ["Read", "Grep", "Glob", "LS", "Create", "Edit", "Execute", "TodoWrite", "Task"]
 ---
 
 # DPT_DATA - Database Agent

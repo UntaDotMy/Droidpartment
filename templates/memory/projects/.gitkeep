@@ -1,0 +1,14 @@
+# Per-project memories are stored here
+# Each project gets its own folder:
+#
+# projects/
+# ├── my-app/
+# │   ├── episodic.yaml    # Events in my-app
+# │   ├── semantic.yaml    # Knowledge about my-app
+# │   └── index.yaml       # Tags for my-app
+# ├── another-project/
+# │   └── ...
+# └── ...
+#
+# Project folders are auto-created when you work on new projects
+# Memories are NEVER mixed between projects
