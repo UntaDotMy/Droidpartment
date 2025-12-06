@@ -1,0 +1,15 @@
+# Lessons Learned - Error Corrections & Mistakes
+# Format: What went wrong, what was the fix, what to remember
+# Captured when user confirms "it's working now"
+
+lessons: []
+
+# Example entry (will be auto-generated):
+# - id: lesson_001
+#   timestamp: 2024-12-06T15:00:00
+#   trigger: "User confirmed fix works"
+#   mistake: "Assumed slow query was the problem"
+#   correction: "Actually connection pool exhaustion"
+#   lesson: "Check pool metrics before query optimization"
+#   applies_to: [database, timeout, performance]
+#   confidence: high

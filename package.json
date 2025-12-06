@@ -1,0 +1,36 @@
+{
+  "name": "droidpartment",
+  "version": "1.0.0",
+  "description": "Autonomous Software Development Department - 18 AI agents (DPT_*) with team leader, memory, and dynamic collaboration.",
+  "author": "Nasri",
+  "license": "MIT",
+  "bin": {
+    "droidpartment": "./bin/install.js"
+  },
+  "files": [
+    "bin",
+    "templates",
+    "README.md"
+  ],
+  "keywords": [
+    "factory",
+    "droid",
+    "ai",
+    "agents",
+    "software-development",
+    "autonomous",
+    "scrum",
+    "devops",
+    "security",
+    "qa",
+    "architect",
+    "code-review"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/droidpartment"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

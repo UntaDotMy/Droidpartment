@@ -1,0 +1,23 @@
+# Memory Index - Quick Tag-Based Lookup
+# Format: tag → list of memory IDs
+# Updated automatically when memories are added
+
+tags: {}
+
+# Example structure (auto-maintained):
+# database:
+#   - ep_20241206_001
+#   - lesson_001
+# timeout:
+#   - ep_20241206_001
+#   - lesson_001
+# authentication:
+#   - ep_20241207_002
+
+# Statistics (auto-updated):
+stats:
+  total_episodic: 0
+  total_semantic: 0
+  total_lessons: 0
+  last_updated: null
+  domains_covered: []
