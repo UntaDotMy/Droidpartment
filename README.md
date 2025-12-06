@@ -79,11 +79,15 @@ DO WHAT'S REQUESTED > SURPRISE USER
 
 ## Changelog
 
+### v1.0.4
+- **CRITICAL FIX:** Filenames now match name field (Factory requirement)
+- Fixed: `chief.md` → `dpt-chief.md`, `developer.md` → `dpt-dev.md`, etc.
+- Droids now properly discovered by Factory AI
+
 ### v1.0.3
-- **NEW:** Added auto-trigger skill for automatic delegation
+- Added auto-trigger skill for automatic delegation
 - Simplified AGENTS.md (shorter, clearer instructions)
 - Skills are auto-invoked by Factory AI based on task
-- Better integration with Factory's skill system
 
 ### v1.0.2
 - **CRITICAL FIX:** Changed all agent names to lowercase (Factory AI requires lowercase)

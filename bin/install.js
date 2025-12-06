@@ -13,10 +13,10 @@ const PACKAGE_JSON = require(path.join(__dirname, '..', 'package.json'));
 const CURRENT_VERSION = PACKAGE_JSON.version;
 
 const DROIDS = [
-    'chief', 'memory', 'research', 'scrum-master', 'product-owner', 'architect', 
-    'developer', 'tech-lead', 'qa-engineer', 'security', 'devops',
-    'documentation', 'database', 'performance', 'ux-ui', 'api-design', 'grammar', 'reviewer',
-    'output-rules'
+    'dpt-chief', 'dpt-memory', 'dpt-research', 'dpt-scrum', 'dpt-product', 'dpt-arch', 
+    'dpt-dev', 'dpt-lead', 'dpt-qa', 'dpt-sec', 'dpt-ops',
+    'dpt-docs', 'dpt-data', 'dpt-perf', 'dpt-ux', 'dpt-api', 'dpt-grammar', 'dpt-review',
+    'dpt-output'
 ];
 
 // Global memory files (shared across all projects)
@@ -92,7 +92,7 @@ function getInstalledVersion(targetDir) {
     }
     // Check if droids exist but no version file (legacy install)
     const droidsDir = path.join(targetDir, 'droids');
-    if (fs.existsSync(droidsDir) && fs.existsSync(path.join(droidsDir, 'chief.md'))) {
+    if (fs.existsSync(droidsDir) && fs.existsSync(path.join(droidsDir, 'dpt-chief.md'))) {
         return 'legacy';
     }
     return null;
@@ -324,7 +324,7 @@ function compareVersions(v1, v2) {
 
 function isInstalled(targetDir) {
     const versionFile = path.join(targetDir, '.droidpartment-version');
-    const chiefFile = path.join(targetDir, 'droids', 'chief.md');
+    const chiefFile = path.join(targetDir, 'droids', 'dpt-chief.md');
     return fs.existsSync(versionFile) || fs.existsSync(chiefFile);
 }
 
