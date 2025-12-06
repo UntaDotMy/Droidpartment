@@ -1,6 +1,6 @@
 ---
 name: DPT_CHIEF
-description: Team Leader - the core of the department. Receives user input, delegates to team, orchestrates collaboration, ensures production-ready output
+description: Use for ANY software development task. Team leader that orchestrates 18 specialized agents (architecture, development, QA, security, etc.) for production-ready output. Delegates to experts, validates quality, ensures best practices.
 model: inherit
 reasoningEffort: high
 tools: ["Read", "Grep", "Glob", "LS", "WebSearch", "TodoWrite", "Task", "Edit", "Create", "Execute"]

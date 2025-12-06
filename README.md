@@ -10,6 +10,25 @@ npx droidpartment
 
 Then enable in Factory: `/settings` → Experimental → Custom Droids → Restart CLI
 
+## How Droids Get Triggered
+
+Custom droids are invoked via the **Task tool** in two ways:
+
+1. **Automatic** - Main droid reads the `description` and decides to use the right agent
+2. **Manual** - You ask: "Use subagent `DPT_CHIEF` to build this feature"
+
+**What gets installed:**
+
+| Item | Location | Purpose |
+| :--- | :--- | :--- |
+| 19 Droids | `~/.factory/droids/` | Specialized agents |
+| AGENTS.md | `~/.factory/AGENTS.md` | Guides main droid to use DPT_CHIEF |
+| Memory | `~/.factory/memory/` | Learning system |
+
+**With AGENTS.md:** Main droid is instructed to delegate to DPT_CHIEF for all tasks.
+
+**Without AGENTS.md:** Main droid can still use droids based on their descriptions, or you ask manually.
+
 ## Agents
 
 | Type | Agents |
@@ -23,7 +42,9 @@ Then enable in Factory: `/settings` → Experimental → Custom Droids → Resta
 ```
 You: "Add login feature"
          ↓
-DPT_CHIEF receives → delegates to team → validates → delivers
+Main Droid → calls DPT_CHIEF via Task tool
+         ↓
+DPT_CHIEF delegates to team → validates → delivers
          ↓
 Production-ready code
 ```
@@ -31,7 +52,7 @@ Production-ready code
 ## Memory System
 
 - **Global lessons** - Shared across all projects
-- **Per-project memory** - Never mixed between projects  
+- **Per-project memory** - Never mixed between projects
 - **Grows smarter** - More sessions = less mistakes
 
 ## Commands
@@ -40,7 +61,7 @@ Production-ready code
 | :--- | :--- |
 | `npx droidpartment` | Install or update |
 | `npx droidpartment --memory` | View and clean memory |
-| `npx droidpartment --uninstall` | Remove agents |
+| `npx droidpartment --uninstall` | Remove everything |
 
 ## Philosophy
 
@@ -55,6 +76,22 @@ DO WHAT'S REQUESTED > SURPRISE USER
 - Node.js >= 16
 - Factory AI Droid CLI
 - Custom Droids enabled
+
+## Changelog
+
+### v1.0.1
+- Improved DPT_CHIEF description for better automatic triggering
+- Fixed uninstall to completely remove memory folder
+- Added edge case handling (uninstall when not installed, memory when not installed)
+- Updated documentation for clarity
+
+### v1.0.0
+- Initial release
+- 19 specialized AI agents (DPT_*)
+- Memory system (global lessons + per-project)
+- AGENTS.md for automatic delegation
+- Install/update/uninstall commands
+- Memory management command
 
 ## License
 
