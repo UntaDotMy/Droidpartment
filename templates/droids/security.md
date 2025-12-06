@@ -1,5 +1,5 @@
 ---
-name: DPT_SEC
+name: dpt-sec
 description: Security expert - audits code for OWASP 2025 vulnerabilities, performs security reviews, identifies threats and recommends mitigations
 model: inherit
 reasoningEffort: high

@@ -1,5 +1,5 @@
 ---
-name: DPT_DEV
+name: dpt-dev
 description: Implementation expert - writes production-quality code following best practices, patterns, error handling, and coding standards
 model: inherit
 tools: ["Read", "Grep", "Glob", "LS", "Create", "Edit", "Execute", "TodoWrite", "Task"]

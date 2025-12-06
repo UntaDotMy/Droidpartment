@@ -1,5 +1,5 @@
 ---
-name: DPT_OUTPUT
+name: dpt-output
 description: Output formatting rules - ensures all output is clean, properly formatted, and visually correct
 model: inherit
 tools: ["Read", "TodoWrite"]

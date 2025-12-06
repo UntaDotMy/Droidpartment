@@ -1,5 +1,5 @@
 ---
-name: DPT_ARCH
+name: dpt-arch
 description: System design expert - designs architecture, selects patterns, analyzes dependencies, ensures scalability and maintainability
 model: inherit
 reasoningEffort: high

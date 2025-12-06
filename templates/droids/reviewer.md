@@ -1,5 +1,5 @@
 ---
-name: DPT_REVIEW
+name: dpt-review
 description: Final reviewer - checks for over-engineering, ensures simplicity, maintainability, and code readability for all skill levels
 model: inherit
 reasoningEffort: high

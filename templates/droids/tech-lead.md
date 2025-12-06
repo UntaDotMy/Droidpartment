@@ -1,5 +1,5 @@
 ---
-name: DPT_LEAD
+name: dpt-lead
 description: Code quality expert - reviews code for SOLID principles, clean code, patterns, security, performance, and maintainability
 model: inherit
 reasoningEffort: high

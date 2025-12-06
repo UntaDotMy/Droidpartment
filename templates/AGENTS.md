@@ -1,24 +1,24 @@
 <coding_guidelines>
 # DROIDPARTMENT - Autonomous Software Development Department
-## 19 Specialized AI Agents Led by DPT_CHIEF
+## 19 Specialized AI Agents Led by dpt-chief
 
 ---
 
 ## AUTOMATIC DELEGATION RULE
 
 **FOR EVERY USER REQUEST:**
-Use the Task tool to delegate to subagent `DPT_CHIEF` immediately.
-DPT_CHIEF is the team leader who will orchestrate all other agents.
+Use the Task tool to delegate to subagent `dpt-chief` immediately.
+dpt-chief is the team leader who will orchestrate all other agents.
 
 ```
 WHEN: User gives any task
-DO: Task tool → subagent_type: "DPT_CHIEF" → pass the user's request
+DO: Task tool → subagent_type: "dpt-chief" → pass the user's request
 ```
 
 Example:
 ```
 User: "Add login feature"
-You: [Use Task tool with subagent_type="DPT_CHIEF"]
+You: [Use Task tool with subagent_type="dpt-chief"]
      "User wants to add login feature. Take ownership and deliver."
 ```
 
@@ -28,22 +28,22 @@ You: [Use Task tool with subagent_type="DPT_CHIEF"]
 
 ```
                     ┌─────────────────┐
-      USER ───────► │   DPT_CHIEF    │ ◄──── LEADER (Entry Point)
+      USER ───────► │   dpt-chief    │ ◄──── LEADER (Entry Point)
                     │  (Team Leader)  │
                     └────────┬────────┘
                              │
          ┌───────────────────┼───────────────────┐
          ▼                   ▼                   ▼
   ┌────────────┐      ┌────────────┐      ┌────────────┐
-  │ DPT_MEMORY │      │DPT_RESEARCH│      │ DPT_SCRUM  │
-  │ DPT_ARCH   │      │ DPT_DEV    │      │ DPT_LEAD   │
-  │ DPT_QA     │      │ DPT_SEC    │      │ DPT_OPS    │
-  │ DPT_DOCS   │      │ DPT_DATA   │      │ DPT_PERF   │
-  │ DPT_UX     │      │ DPT_API    │      │ DPT_GRAMMAR│
+  │ dpt-memory │      │dpt-research│      │ dpt-scrum  │
+  │ dpt-arch   │      │ dpt-dev    │      │ dpt-lead   │
+  │ dpt-qa     │      │ dpt-sec    │      │ dpt-ops    │
+  │ dpt-docs   │      │ dpt-data   │      │ dpt-perf   │
+  │ dpt-ux     │      │ dpt-api    │      │dpt-grammar │
   └────────────┘      └────────────┘      └────────────┘
                              │
                     ┌────────┴────────┐
-                    │   DPT_REVIEW    │
+                    │   dpt-review    │
                     └─────────────────┘
 ```
 
@@ -53,39 +53,39 @@ You: [Use Task tool with subagent_type="DPT_CHIEF"]
 
 | Subagent | Purpose |
 |----------|---------|
-| `DPT_CHIEF` | **LEADER** - Delegate ALL tasks here first |
-| `DPT_MEMORY` | Check past lessons, capture new knowledge |
-| `DPT_RESEARCH` | Find official docs, best practices |
-| `DPT_SCRUM` | Task decomposition |
-| `DPT_PRODUCT` | Requirements, user stories |
-| `DPT_ARCH` | System design, patterns |
-| `DPT_DEV` | Implementation |
-| `DPT_LEAD` | Code review |
-| `DPT_QA` | Testing |
-| `DPT_SEC` | Security (OWASP 2025) |
-| `DPT_OPS` | DevOps, CI/CD |
-| `DPT_DOCS` | Documentation |
-| `DPT_DATA` | Database |
-| `DPT_PERF` | Performance |
-| `DPT_UX` | UI/UX |
-| `DPT_API` | API design |
-| `DPT_GRAMMAR` | Grammar, clarity |
-| `DPT_REVIEW` | Anti-over-engineering |
-| `DPT_OUTPUT` | Output formatting rules |
+| `dpt-chief` | **LEADER** - Delegate ALL tasks here first |
+| `dpt-memory` | Check past lessons, capture new knowledge |
+| `dpt-research` | Find official docs, best practices |
+| `dpt-scrum` | Task decomposition |
+| `dpt-product` | Requirements, user stories |
+| `dpt-arch` | System design, patterns |
+| `dpt-dev` | Implementation |
+| `dpt-lead` | Code review |
+| `dpt-qa` | Testing |
+| `dpt-sec` | Security (OWASP 2025) |
+| `dpt-ops` | DevOps, CI/CD |
+| `dpt-docs` | Documentation |
+| `dpt-data` | Database |
+| `dpt-perf` | Performance |
+| `dpt-ux` | UI/UX |
+| `dpt-api` | API design |
+| `dpt-grammar` | Grammar, clarity |
+| `dpt-review` | Anti-over-engineering |
+| `dpt-output` | Output formatting rules |
 
 ---
 
 ## HOW IT WORKS
 
 1. **You receive user request**
-2. **Immediately delegate to DPT_CHIEF** using Task tool
-3. **DPT_CHIEF orchestrates the team:**
-   - Calls DPT_MEMORY for past lessons
-   - Calls DPT_RESEARCH for best practices
+2. **Immediately delegate to dpt-chief** using Task tool
+3. **dpt-chief orchestrates the team:**
+   - Calls dpt-memory for past lessons
+   - Calls dpt-research for best practices
    - Delegates to appropriate agents
    - Validates before delivery
 4. **Agents collaborate dynamically** - call each other as needed
-5. **DPT_CHIEF validates** with DPT_REVIEW, DPT_QA, DPT_SEC
+5. **dpt-chief validates** with dpt-review, dpt-qa, dpt-sec
 6. **Deliver production-ready output**
 
 ---
@@ -106,7 +106,7 @@ PRODUCTION READY > HALF DONE
 
 ### DO:
 ```
-✓ Delegate to DPT_CHIEF for ALL tasks
+✓ Delegate to dpt-chief for ALL tasks
 ✓ Let agents collaborate dynamically
 ✓ Do exactly what user requested
 ✓ Validate before delivery
@@ -177,8 +177,8 @@ graph TD
 ## REMEMBER
 
 ```
-ALWAYS delegate to DPT_CHIEF first.
-DPT_CHIEF leads the team.
+ALWAYS delegate to dpt-chief first.
+dpt-chief leads the team.
 Agents work together for maximum output.
 Validate everything before delivery.
 VERIFY output formatting before showing.

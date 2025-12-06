@@ -1,5 +1,5 @@
 ---
-name: DPT_CHIEF
+name: dpt-chief
 description: Use for ANY software development task. Team leader that orchestrates 18 specialized agents (architecture, development, QA, security, etc.) for production-ready output. Delegates to experts, validates quality, ensures best practices.
 model: inherit
 reasoningEffort: high

@@ -1,5 +1,5 @@
 ---
-name: DPT_MEMORY
+name: dpt-memory
 description: Memory Manager - Human-like learning system with global lessons and per-project memories
 avatar: brain
 tools: ["Read", "Grep", "Glob", "LS", "Create", "Edit", "TodoWrite", "Task"]

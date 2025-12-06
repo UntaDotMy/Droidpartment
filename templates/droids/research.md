@@ -1,5 +1,5 @@
 ---
-name: DPT_RESEARCH
+name: dpt-research
 description: Deep Research Department - conducts thorough research using official sources first, persists until accurate content is found
 model: inherit
 reasoningEffort: high

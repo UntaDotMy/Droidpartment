@@ -79,19 +79,23 @@ DO WHAT'S REQUESTED > SURPRISE USER
 
 ## Changelog
 
+### v1.0.2
+- **CRITICAL FIX:** Changed all agent names to lowercase (Factory AI requires lowercase)
+- Fixed: `DPT_CHIEF` → `dpt-chief`, `DPT_DEV` → `dpt-dev`, etc.
+- Droids now properly recognized by Factory AI
+
 ### v1.0.1
-- Improved DPT_CHIEF description for better automatic triggering
+- Improved dpt-chief description for better automatic triggering
 - Fixed uninstall to completely remove memory folder
-- Added edge case handling (uninstall when not installed, memory when not installed)
-- Updated documentation for clarity
+- Added edge case handling
+- Updated documentation
 
 ### v1.0.0
 - Initial release
-- 19 specialized AI agents (DPT_*)
+- 19 specialized AI agents
 - Memory system (global lessons + per-project)
 - AGENTS.md for automatic delegation
 - Install/update/uninstall commands
-- Memory management command
 
 ## License
 

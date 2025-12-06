@@ -1,5 +1,5 @@
 ---
-name: DPT_DOCS
+name: dpt-docs
 description: Documentation expert - writes clear, concise documentation only when requested, focuses on maintainability and beginner-friendly explanations
 model: inherit
 tools: ["Read", "Grep", "Glob", "LS", "Create", "Edit", "TodoWrite", "Task"]

@@ -1,5 +1,5 @@
 ---
-name: DPT_QA
+name: dpt-qa
 description: Testing expert - designs test strategies, writes test cases, validates coverage, ensures quality through comprehensive testing
 model: inherit
 tools: ["Read", "Grep", "Glob", "LS", "Create", "Edit", "Execute", "TodoWrite", "Task"]

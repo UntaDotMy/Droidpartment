@@ -1,5 +1,5 @@
 ---
-name: DPT_GRAMMAR
+name: dpt-grammar
 description: Grammar and clarity checker - ensures all documentation, comments, and written content is clear, accurate, and readable by everyone
 model: inherit
 tools: ["Read", "Grep", "Glob", "LS", "Edit", "TodoWrite", "Task"]

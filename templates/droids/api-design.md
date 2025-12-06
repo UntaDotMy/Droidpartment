@@ -1,5 +1,5 @@
 ---
-name: DPT_API
+name: dpt-api
 description: API design expert - creates simple, consistent, and intuitive APIs that are easy to use and maintain
 model: inherit
 tools: ["Read", "Grep", "Glob", "LS", "Create", "Edit", "TodoWrite", "Task"]
