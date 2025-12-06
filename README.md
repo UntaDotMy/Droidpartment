@@ -79,6 +79,12 @@ DO WHAT'S REQUESTED > SURPRISE USER
 
 ## Changelog
 
+### v1.0.3
+- **NEW:** Added auto-trigger skill for automatic delegation
+- Simplified AGENTS.md (shorter, clearer instructions)
+- Skills are auto-invoked by Factory AI based on task
+- Better integration with Factory's skill system
+
 ### v1.0.2
 - **CRITICAL FIX:** Changed all agent names to lowercase (Factory AI requires lowercase)
 - Fixed: `DPT_CHIEF` → `dpt-chief`, `DPT_DEV` → `dpt-dev`, etc.
