@@ -1,0 +1,19 @@
+# GLOBAL STATISTICS - Learning Progress
+# Tracks overall learning across all projects
+
+global_stats:
+  total_sessions: 0
+  total_lessons: 0
+  total_mistakes: 0
+  total_prevented: 0
+  first_session: null
+  last_session: null
+  
+learning_curve: []
+# Format:
+# - date: YYYY-MM-DD
+#   sessions: <n>
+#   lessons: <n>
+#   mistakes: <n>
+#   prevented: <n>
+#   trend: "improving" | "stable" | "declining"

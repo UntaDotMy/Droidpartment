@@ -1,50 +1,72 @@
 ---
 name: droidpartment
-description: Use for ANY software development task - coding, debugging, testing, architecture, security, performance, API design, documentation. Delegates to specialized team of 18 AI agents led by dpt-chief.
+description: 18 expert agents with memory system. Tracks lessons, mistakes, and learning progress.
 ---
 
-# Droidpartment - Autonomous Software Development
+# Droidpartment - 18 Experts + Memory
 
-When this skill is active, delegate ALL work to the dpt-chief subagent.
+Always use memory at start and end of tasks.
 
-## Instructions
+## Task Flow
 
-1. **IMMEDIATELY** call Task tool with:
-   - subagent_type: "dpt-chief"
-   - prompt: Pass the user's full request
+```
+1. START: dpt-memory (get lessons)
+2. WORK: Call experts
+3. END: dpt-memory (save lessons)
+4. OUTPUT: dpt-output (show stats)
+```
 
-2. **DO NOT** attempt the task yourself
+## The Experts
 
-3. **dpt-chief will**:
-   - Analyze the request
-   - Call specialized agents (dpt-dev, dpt-qa, dpt-sec, etc.)
-   - Validate output
-   - Return production-ready result
+| Expert | Role |
+|--------|------|
+| dpt-memory | Lessons & learning stats |
+| dpt-sec | Security |
+| dpt-lead | Code review |
+| dpt-qa | Testing |
+| dpt-arch | Architecture |
+| dpt-dev | Implementation |
+| dpt-review | Simplicity |
+| dpt-data | Database |
+| dpt-api | API design |
+| dpt-ux | UI/UX |
+| dpt-docs | Documentation |
+| dpt-perf | Performance |
+| dpt-ops | DevOps |
+| dpt-research | Research |
+| dpt-product | Requirements |
+| dpt-scrum | Task breakdown |
+| dpt-grammar | Grammar |
+| dpt-output | Format + stats |
+
+## Memory System
+
+```
+~/.factory/memory/
+├── lessons.yaml     ← What worked
+├── mistakes.yaml    ← What to avoid
+├── patterns.yaml    ← Successful patterns
+├── stats.yaml       ← Learning progress
+└── projects/        ← Per-project memory
+```
+
+## Output Format
+
+End every task with:
+```
+MEMORY STATUS:
+Project: <name>
+Lessons: <n> (+<new>)
+Mistakes: <n> (+<new>)
+Prevented: <n>
+Learning: Improving/Stable/Needs Attention
+```
 
 ## Example
 
-User asks: "Add authentication to my app"
-
-You do:
 ```
-Task tool
-  subagent_type: "dpt-chief"
-  prompt: "User wants to add authentication to their app. Take ownership and deliver production-ready code."
+1. dpt-memory: "START - audit task"
+2. dpt-sec + dpt-lead + dpt-qa (parallel)
+3. dpt-memory: "END - save findings"
+4. dpt-output: "Format with stats"
 ```
-
-## When to Use
-
-- ANY coding task
-- ANY debugging task
-- ANY testing task
-- ANY architecture question
-- ANY security review
-- ANY performance optimization
-- ANY API design
-- ANY documentation request
-
-## Success Criteria
-
-- Task delegated to dpt-chief
-- dpt-chief returns completed work
-- Output is production-ready

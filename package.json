@@ -1,7 +1,7 @@
 {
   "name": "droidpartment",
-  "version": "2.0.0",
-  "description": "Autonomous Software Development Department - 19 AI agents with PDCA cycle, department workflow (Dev->Lead->QA), and memory that grows smarter over time.",
+  "version": "3.0.1",
+  "description": "18 Expert Agents - Call specialists directly for security, code review, testing, architecture, and more. Parallel or sequential.",
   "author": "Nasri",
   "license": "MIT",
   "bin": {

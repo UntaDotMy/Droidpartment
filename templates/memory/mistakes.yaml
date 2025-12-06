@@ -1,34 +1,13 @@
-# Droidpartment Mistakes Memory
-# Mistakes captured here help prevent repetition
-# Format: YAML list of mistake records
-#
-# Over time, this file grows and helps the department
-# avoid making the same mistakes twice.
-#
-# Structure:
-# - id: mistake_XXX
-#   date: "YYYY-MM-DD"
-#   category: "security|performance|architecture|testing|..."
+# GLOBAL MISTAKES - Prevention Database
+# Mistakes made and how to prevent them
+# Updated by dpt-memory at end of each task
+
+mistakes: []
+
+# Format:
+# - id: mistake_<timestamp>
+#   date: YYYY-MM-DD
 #   mistake: "What went wrong"
-#   root_cause: "Why it happened"
-#   consequence: "What was the impact"
-#   fix_applied: "How it was fixed"
-#   prevention:
-#     - "Step 1 to prevent"
-#     - "Step 2 to prevent"
-#   source_project: "project-name"
-
-# Example (will be replaced with real mistakes):
-# - id: mistake_001
-#   date: "2025-12-06"
-#   category: "security"
-#   mistake: "Stored JWT in localStorage"
-#   root_cause: "Assumed frontend-only access was safe"
-#   consequence: "XSS vulnerability"
-#   fix_applied: "Moved to httpOnly cookie"
-#   prevention:
-#     - "NEVER store tokens in localStorage"
-#     - "ALWAYS use httpOnly cookies for auth tokens"
-#   source_project: "my-app"
-
-# Your mistakes will be captured here automatically
+#   prevention: "How to avoid this"
+#   project: "Where this happened"
+#   times_prevented: 0  # How many times we avoided this mistake since

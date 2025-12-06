@@ -1,18 +1,13 @@
 # GLOBAL LESSONS - Universal Knowledge
 # Lessons that apply to ANY project
-# Location: ~/.factory/memory/lessons.yaml
-# 
-# These grow over time - more sessions = more wisdom
-# Start empty like a child, become expert over time
+# Updated by dpt-memory at end of each task
 
 lessons: []
 
-# Example (auto-generated when you confirm fixes):
-# - id: lesson_001
-#   timestamp: 2024-12-06T15:00:00
-#   learned_from: "my-app"           # Which project taught this
-#   mistake: "Assumed slow query was the problem"
-#   correction: "Actually connection pool exhaustion"
-#   lesson: "Check pool metrics before query optimization"
-#   applies_to: [database, timeout, performance]
-#   universal: true                   # Works in any project
+# Format:
+# - id: lesson_<timestamp>
+#   date: YYYY-MM-DD
+#   lesson: "What was learned"
+#   context: "When this applies"
+#   project: "Which project taught this"
+#   prevented_mistakes: 0  # How many times this lesson prevented a mistake

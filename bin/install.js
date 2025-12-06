@@ -13,16 +13,16 @@ const PACKAGE_JSON = require(path.join(__dirname, '..', 'package.json'));
 const CURRENT_VERSION = PACKAGE_JSON.version;
 
 const DROIDS = [
-    'dpt-chief', 'dpt-memory', 'dpt-research', 'dpt-scrum', 'dpt-product', 'dpt-arch', 
+    'dpt-memory', 'dpt-research', 'dpt-scrum', 'dpt-product', 'dpt-arch', 
     'dpt-dev', 'dpt-lead', 'dpt-qa', 'dpt-sec', 'dpt-ops',
     'dpt-docs', 'dpt-data', 'dpt-perf', 'dpt-ux', 'dpt-api', 'dpt-grammar', 'dpt-review',
     'dpt-output'
 ];
 
 // Global memory files (shared across all projects)
-const GLOBAL_MEMORY_FILES = ['lessons.yaml', 'patterns.yaml', 'mistakes.yaml'];
+const GLOBAL_MEMORY_FILES = ['lessons.yaml', 'patterns.yaml', 'mistakes.yaml', 'stats.yaml'];
 // Per-project memory files (created when working on a project)
-const PROJECT_MEMORY_FILES = ['episodic.yaml', 'semantic.yaml', 'index.yaml'];
+const PROJECT_MEMORY_FILES = ['knowledge.yaml', 'mistakes.yaml', 'stats.yaml'];
 
 const COLORS = {
     reset: '\x1b[0m',

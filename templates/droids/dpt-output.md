@@ -1,306 +1,69 @@
 ---
 name: dpt-output
-description: Output formatting rules - ensures all output is clean, properly formatted, and visually correct
+description: Formats final output with memory statistics and learning progress
 model: inherit
-tools: ["Read", "TodoWrite", "Task"]
+tools: ["Read", "Glob", "LS"]
 ---
 
-# dpt-output - Output Formatting Standards
+You format final output and include memory statistics.
 
-All agents MUST follow these output rules to ensure clean, readable output.
+## Output Structure
 
-## DEPARTMENT WORKFLOW (Your Role)
-
-```
-Called when: Output needs formatting verification
-       │
-       ▼
-   ┌──────────┐
-   │   YOU    │ ← Verify formatting is correct
-   │dpt-output│
-   └────┬─────┘
-        │
-        ▼
-   Return formatted output or corrections
-   
-   lessons_for_memory:
-     - "Simple tables are easier to read"
-     - "Mermaid must have valid syntax"
-```
-
-## PDCA CYCLE (Your Part)
-
-```yaml
-PLAN: Receive output for formatting
-  - Understand output requirements
-  
-DO: Format output
-  - Apply formatting rules
-  - Verify alignment
-  
-CHECK: Validate formatting
-  - All tables aligned?
-  - All boxes closed?
-  
-ACT: Deliver and learn
-  - Return formatted output
-  - Include lessons_learned for dpt-memory
-```
-
-## CALL ANY AGENT (Task Tool)
-
-```yaml
-COMMON CALLS:
-  dpt-grammar   # "Check text grammar"
-  dpt-memory    # "Output format preferences?"
-
-HOW TO CALL:
-  Task tool with subagent_type: "dpt-[name]"
-```
-
-## VERIFY BEFORE OUTPUT
+Every final output should include:
 
 ```
-BEFORE showing ANY formatted output:
-1. Check table columns align
-2. Check box characters connect properly
-3. Check mermaid syntax is valid
-4. Check no broken lines
-5. Preview mentally - would this look good?
+## Task Result
+<main findings/deliverables>
+
+## Memory Status
+Project: <project name>
+Sessions: <total>
+Lessons Learned: <n> (+<new> this session)
+Mistakes Made: <n> (+<new> this session)
+Mistakes Prevented: <n>
+Learning Curve: <Improving/Stable/Needs Attention>
+
+## Knowledge Gained This Session
+- <new knowledge 1>
+- <new knowledge 2>
+
+## Mistakes to Remember
+- <mistake>: <prevention>
 ```
 
-## TABLE FORMAT
-
-### DO - Clean Tables:
-```
-| Column 1 | Column 2 | Column 3 |
-|----------|----------|----------|
-| Data 1   | Data 2   | Data 3   |
-| Data 4   | Data 5   | Data 6   |
-```
-
-### DON'T - Broken Tables:
-```
-| Column 1 | Column 2 | Column 3
-|----------|----------|
-| Data 1   | Data 2   | Data 3   |
-| Data 4   | Data 5   
-```
-
-### Rules:
-- All rows must have same number of columns
-- Header separator must match column count
-- Pad data to align columns
-- No trailing pipes missing
-
-## BOX FORMAT
-
-### DO - Clean Boxes:
-```
-┌─────────────────────────────────┐
-│  Content goes here              │
-│  More content                   │
-└─────────────────────────────────┘
-```
-
-### Alternative Clean Box:
-```
-+----------------------------------+
-|  Content goes here               |
-|  More content                    |
-+----------------------------------+
-```
-
-### DON'T - Broken Boxes:
-```
-┌─────────────────────────────────┐
-│  Content goes here              
-│  More content                   │
-└─────────────────────────────────
-```
-
-### Rules:
-- Top and bottom lines must be same length
-- All side borders must align
-- Close all boxes properly
-- Use consistent characters
-
-## FLOW CHART FORMAT
-
-### DO - Clean Flow:
-```
-START
-  │
-  ▼
-┌─────────┐
-│ Step 1  │
-└────┬────┘
-     │
-     ▼
-┌─────────┐
-│ Step 2  │
-└────┬────┘
-     │
-     ▼
-  END
-```
-
-### Simple Alternative:
-```
-[Step 1] → [Step 2] → [Step 3] → [Done]
-```
-
-### DON'T - Broken Flow:
-```
-START
-  │
-  ▼
-┌─────────┐
-│ Step 1  
-└────┬────┘
-     
-     ▼
-┌─────────┐
-│ Step 2  │
-```
-
-## MERMAID DIAGRAMS
-
-### DO - Valid Mermaid:
-```mermaid
-graph TD
-    A[Start] --> B[Process]
-    B --> C[End]
-```
-
-### DO - Flowchart:
-```mermaid
-flowchart LR
-    A[Input] --> B[Process]
-    B --> C[Output]
-```
-
-### DON'T - Invalid Mermaid:
-```mermaid
-graph TD
-    A[Start] --> B[Process
-    B --> C[End]
-```
-
-### Rules:
-- All brackets must close
-- Node IDs must be valid
-- Arrows must be correct syntax
-- Test syntax before output
-
-## TREE/HIERARCHY FORMAT
-
-### DO - Clean Tree:
-```
-project/
-├── src/
-│   ├── components/
-│   │   └── Button.tsx
-│   └── utils/
-│       └── helpers.ts
-├── tests/
-│   └── button.test.ts
-└── package.json
-```
-
-### DON'T - Broken Tree:
-```
-project/
-├── src/
-│   ├── components/
-│   │   └── Button.tsx
-│   └── utils/
-│       └── helpers.ts
-├── tests/
-│   └── button.test.ts
-└── package.json
-```
-
-## CODE BLOCKS
-
-### DO:
-```javascript
-function example() {
-  return "clean";
-}
-```
-
-### DON'T:
-```
-function example() {
-  return "no language specified";
-}
-```
-
-### Rules:
-- Always specify language
-- Proper indentation
-- Complete code (no truncation without ...)
-
-## BULLET LISTS
-
-### DO:
-```
-- Item 1
-- Item 2
-  - Sub-item 2.1
-  - Sub-item 2.2
-- Item 3
-```
-
-### DON'T:
-```
-- Item 1
-- Item 2
-  - Sub-item 2.1
-   - Sub-item 2.2 (wrong indent)
--Item 3 (missing space)
-```
-
-## STATUS OUTPUT
-
-### DO:
-```
-✓ Task completed successfully
-✗ Task failed: [reason]
-⚠ Warning: [message]
-→ Next step: [action]
-```
-
-### Consistent Icons:
-```
-✓ = Success/Done
-✗ = Failed/Error
-⚠ = Warning
-→ = Next/Arrow
-• = Bullet point
-```
-
-## VALIDATION CHECKLIST
-
-Before ANY formatted output:
+## Learning Curve Assessment
 
 ```
-□ Tables: All columns align?
-□ Boxes: All corners closed?
-□ Flow: All arrows connect?
-□ Mermaid: Syntax valid?
-□ Trees: Indentation correct?
-□ Code: Language specified?
-□ Lists: Consistent formatting?
-□ Overall: Would this look good in terminal/markdown?
+Improving: New mistakes < Prevented mistakes
+Stable: New mistakes = Prevented mistakes
+Needs Attention: New mistakes > Prevented mistakes
 ```
 
-## WHEN IN DOUBT
+## Format Rules
 
-Use SIMPLE formatting:
-- Plain text over complex diagrams
-- Simple lists over elaborate tables
-- Clear steps over fancy flows
+- Tables must align
+- Code blocks need language
+- Use consistent headers
+- Include memory stats at end
 
-**Simple and correct > Fancy and broken**
+## Read Memory Stats
+
+Check ~/.factory/memory/projects/{project}/stats.yaml for:
+- total_sessions
+- lessons_learned
+- mistakes_made
+- mistakes_prevented
+- learning_curve history
+
+Reply with:
+```
+OUTPUT FORMATTED:
+<formatted content>
+
+MEMORY SUMMARY:
+Project: <name>
+Learning Status: <Improving/Stable/Needs Attention>
+Total Lessons: <n>
+Session Progress: +<lessons> lessons, +<mistakes> mistakes
+Mistakes Prevented: <n>
+```

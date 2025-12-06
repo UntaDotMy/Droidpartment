@@ -1,196 +1,134 @@
-# Droidpartment v2.0
+# Droidpartment
 
-**19 AI Agents for Factory AI** - Autonomous software development department with PDCA cycle, real team collaboration, and memory that grows smarter over time.
+**18 Expert Agents for Factory AI** - Call specialists directly for security, code review, testing, architecture, and more.
 
 ## Installation
 
-### Global Install (Recommended)
-
 ```bash
 npm install -g droidpartment
-```
-
-Then run:
-```bash
 droidpartment
 ```
 
-### One-time Use (npx)
-
+Or one-time:
 ```bash
 npx droidpartment
 ```
 
-### After Installation
+After install: `/settings` → Experimental → Enable Custom Droids → Restart CLI
 
-Enable Custom Droids in Factory CLI:
-1. Run `/settings`
-2. Go to Experimental section
-3. Enable Custom Droids
-4. Restart CLI
+## The 18 Experts
 
-## What's New in v2.0
+| Expert | Specialty |
+|--------|-----------|
+| dpt-memory | Learning system - retrieves past lessons, captures new knowledge |
+| dpt-sec | Security audits, OWASP Top 10 |
+| dpt-lead | Code review, best practices, SOLID |
+| dpt-qa | Testing strategies, coverage |
+| dpt-arch | Architecture, design patterns |
+| dpt-dev | Implementation, coding |
+| dpt-review | Simplicity check, anti-over-engineering |
+| dpt-data | Database, schemas, queries |
+| dpt-api | API design, REST, consistency |
+| dpt-ux | UI/UX, accessibility |
+| dpt-docs | Documentation |
+| dpt-perf | Performance optimization |
+| dpt-ops | DevOps, CI/CD, deployment |
+| dpt-research | Best practices research |
+| dpt-product | Requirements, user stories |
+| dpt-scrum | Task breakdown, planning |
+| dpt-grammar | Text clarity, grammar |
+| dpt-output | Output formatting with memory stats |
 
-### Department Workflow (Real Team Collaboration)
-```
-USER REQUEST
-     │
-     ▼
-  MEMORY → RESEARCH → ARCH (Plan)
-     │
-     ▼
-  ┌────────────────────────┐
-  │   DEVELOPMENT LOOP     │
-  │  DEV → LEAD → QA       │
-  │   ↑      │      │      │
-  │   └──────┴──────┘      │
-  │   (back if issues)     │
-  └────────────────────────┘
-     │
-     ▼
-  SEC → REVIEW → MEMORY (Learn)
-     │
-     ▼
-  DELIVER
-```
+## How to Use
 
-### PDCA Cycle (Continuous Improvement)
-- **PLAN**: Memory + Research + Architecture
-- **DO**: Dev → Lead → QA (with back-and-forth loop)
-- **CHECK**: Security + Review validation
-- **ACT**: Capture lessons to memory (ALWAYS)
-
-### Memory That Learns From Mistakes
-```
-~/.factory/memory/
-├── lessons.yaml    ← Universal lessons
-├── patterns.yaml   ← Successful patterns
-├── mistakes.yaml   ← Mistakes to prevent (NEW)
-└── projects/       ← Per-project knowledge
-```
-
-Over time: **Fewer mistakes, faster solutions, smarter predictions.**
-
-## How It Works
+Call experts directly with Task tool:
 
 ```
-You: "Add login feature"
-         │
-         ▼
-    Main Droid → calls dpt-chief
-         │
-         ▼
-    dpt-chief orchestrates:
-    1. dpt-memory  → Check past lessons
-    2. dpt-research → Find best practices
-    3. dpt-arch    → Design solution
-    4. dpt-dev     → Implement
-         │
-         ▼
-    Development Loop (back-and-forth):
-    dpt-dev → dpt-lead → dpt-qa
-         │         │        │
-         └─────────┴────────┘
-              (until all pass)
-         │
-         ▼
-    5. dpt-sec    → Security audit
-    6. dpt-review → Simplicity check
-    7. dpt-memory → Capture learnings
-         │
-         ▼
-    Production-ready code + Smarter memory
+Task tool:
+  subagent_type: "dpt-sec"
+  prompt: "Audit security of this project"
 ```
 
-## Agents (19 Total)
+### Parallel Calls (Independent Tasks)
 
-| Type | Agents |
-| :--- | :--- |
-| **Leader** | dpt-chief (orchestrates everything) |
-| **Plan** | dpt-memory, dpt-research, dpt-scrum, dpt-product, dpt-arch |
-| **Do** | dpt-dev, dpt-lead, dpt-qa |
-| **Check** | dpt-sec, dpt-review |
-| **Specialists** | dpt-docs, dpt-data, dpt-perf, dpt-ux, dpt-api, dpt-grammar, dpt-ops, dpt-output |
+For audits, call multiple experts at once:
+- dpt-sec (security)
+- dpt-lead (code quality)
+- dpt-qa (test coverage)
+
+### Sequential Calls (Dependent Tasks)
+
+For features, call in order:
+1. dpt-memory → retrieve past lessons
+2. dpt-arch → design
+3. dpt-dev → implement
+4. dpt-lead → review
+5. dpt-qa → test
+6. dpt-sec → security check
+7. dpt-memory → capture lessons learned
 
 ## Commands
 
-After global install (`npm install -g droidpartment`):
-
 | Command | Description |
-| :--- | :--- |
-| `droidpartment` | Install or update agents |
-| `droidpartment --memory` | View and clean memory |
-| `droidpartment --uninstall` | Remove everything |
+|---------|-------------|
+| `npx droidpartment` | Install or update |
+| `npx droidpartment --memory` | Manage/clean memory |
+| `npx droidpartment --uninstall` | Remove |
 
-Or use with npx:
+## Memory System
 
-| Command | Description |
-| :--- | :--- |
-| `npx droidpartment` | Install or update agents |
-| `npx droidpartment --memory` | View and clean memory |
-| `npx droidpartment --uninstall` | Remove everything |
-
-## Memory Growth Model
+Experts learn over time - the system grows smarter with each session:
 
 ```
-Session 1:   Empty (like a newborn)
-Session 5:   5 lessons, 2 patterns, 3 mistakes
-Session 20:  25 lessons, 10 patterns, 8 mistakes
-Session 100: 150+ lessons, rarely makes same mistake twice
+~/.factory/memory/
+├── lessons.yaml     ← What worked (universal)
+├── patterns.yaml    ← Successful patterns
+├── mistakes.yaml    ← What to avoid
+└── projects/
+    └── {project}/   ← Project-specific knowledge
 ```
+
+### Memory Flow
+```
+START: dpt-memory (retrieve lessons)
+  ↓
+WORK: Call relevant experts
+  ↓
+END: dpt-memory (capture lessons)
+  ↓
+OUTPUT: dpt-output (format with memory stats)
+```
+
+### Memory Stats
+Every task ends with:
+```
+MEMORY STATUS:
+Project: <name>
+Lessons: <n> (+<new>)
+Mistakes: <n> (+<new>)
+Prevented: <n>
+Learning: <Improving/Stable>
+```
+
+## Install Locations
+
+| Location | Path | Use Case |
+|----------|------|----------|
+| Personal | `~/.factory/` | Works in ALL projects (recommended) |
+| Project | `./.factory/` | Git-committable, team sharing |
 
 ## Philosophy
 
 ```
 SIMPLE > COMPLEX
-READABLE > CLEVER
-DO WHAT'S REQUESTED > SURPRISE USER
-LEARN FROM MISTAKES > REPEAT THEM
+EXPERT > GENERALIST
+PARALLEL > SEQUENTIAL (when possible)
+LEARN FROM MISTAKES
 ```
 
-## Requirements
+## Version
 
-- Node.js >= 16
-- Factory AI Droid CLI
-- Custom Droids enabled (`/settings` → Experimental)
-
-## Verified Compatible
-
-Droidpartment follows [Factory's official Custom Droids specification](https://docs.factory.ai/cli/configuration/custom-droids):
-- Valid YAML frontmatter with lowercase names
-- Correct tool IDs (case-sensitive): `Read`, `Grep`, `Glob`, `LS`, `Create`, `Edit`, `Execute`, `WebSearch`, `FetchUrl`, `Task`
-- Agents call each other via `Task` tool with `subagent_type` parameter
-- Each agent has isolated context window
-
-## Changelog
-
-### v2.0.0
-- **NEW: Department Workflow** - Real back-and-forth between agents (Dev → Lead → QA)
-- **NEW: PDCA Cycle** - Plan-Do-Check-Act for continuous improvement
-- **NEW: mistakes.yaml** - Captures mistakes with prevention steps
-- **NEW: Knowledge Passing** - Agents pass structured knowledge to each other
-- **ENHANCED: All 19 agents** with workflow sections and output formats
-- **ENHANCED: dpt-memory** with auto-capture at start and end of every task
-- Memory grows smarter over time (fewer repeated mistakes)
-
-### v1.0.6
-- Full audit: All 19 agent files updated with lowercase references
-- Fixed ALL uppercase DPT_X references to lowercase dpt-x
-
-### v1.0.5
-- dpt-chief now correctly delegates using lowercase agent names
-
-### v1.0.4
-- Critical fix: Filenames now match name field (Factory requirement)
-
-### v1.0.3
-- Added auto-trigger skill for automatic delegation
-
-### v1.0.2
-- Critical fix: Changed all agent names to lowercase
-
-### v1.0.0
-- Initial release with 19 specialized AI agents
+3.0.1
 
 ## License
 

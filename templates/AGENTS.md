@@ -1,94 +1,88 @@
-# Droidpartment v2.0 - Autonomous Software Development Department
+<coding_guidelines>
+# Droidpartment - 18 Expert Agents
 
-## CRITICAL RULE
+Call specialists directly. Always use memory at start and end.
 
-**For EVERY task, ALWAYS use the Task tool to delegate to subagent `dpt-chief` first.**
-
-dpt-chief is the team leader who orchestrates 18 specialized agents with a real department workflow.
-
-## How to Delegate
+## Task Flow
 
 ```
-Task tool → subagent_type: "dpt-chief" → pass user's request
+START: dpt-memory (retrieve lessons)
+  ↓
+WORK: Call relevant experts (parallel or sequential)
+  ↓
+END: dpt-memory (capture lessons)
+  ↓
+OUTPUT: dpt-output (format with memory stats)
 ```
 
-## Example
+## The 18 Experts
 
-User: "Add login feature"
-You: Call Task tool with subagent_type="dpt-chief", prompt="User wants to add login feature. Take ownership and deliver."
-
-## Department Workflow (v2.0)
-
-```
-USER REQUEST
-     │
-     ▼
-  MEMORY → RESEARCH → ARCH (Plan)
-     │
-     ▼
-  ┌────────────────────────┐
-  │   DEVELOPMENT LOOP     │
-  │  DEV → LEAD → QA       │
-  │   ↑      │      │      │
-  │   └──────┴──────┘      │
-  │   (back if issues)     │
-  └────────────────────────┘
-     │
-     ▼
-  SEC → REVIEW → MEMORY (Learn)
-     │
-     ▼
-  DELIVER
-```
-
-## PDCA Cycle (Continuous Improvement)
-
-Every task follows Plan-Do-Check-Act:
-- **PLAN**: Memory + Research + Architecture
-- **DO**: Dev → Lead → QA (with back-and-forth)
-- **CHECK**: Security + Review validation
-- **ACT**: Capture lessons to memory (ALWAYS)
-
-## Memory System (Grows Smarter Over Time)
-
-```
-~/.factory/memory/
-├── lessons.yaml    ← Universal lessons
-├── patterns.yaml   ← Successful patterns
-├── mistakes.yaml   ← Mistakes to prevent
-└── projects/       ← Per-project knowledge
-```
-
-Over time: Fewer mistakes, faster solutions, smarter predictions.
-
-## Available Subagents (19 Total)
-
-| Agent | Purpose |
-|-------|---------|
-| dpt-chief | Team leader (ALWAYS call first) |
-| dpt-memory | Learning system (start + end) |
-| dpt-research | Official docs research |
+| Expert | Specialty |
+|--------|-----------|
+| dpt-memory | Lessons, mistakes, knowledge tracking |
+| dpt-sec | Security audits, OWASP |
+| dpt-lead | Code review, best practices |
+| dpt-qa | Testing, coverage |
+| dpt-arch | Architecture, design patterns |
 | dpt-dev | Implementation |
-| dpt-arch | Architecture |
-| dpt-qa | Testing |
-| dpt-sec | Security |
-| dpt-ops | DevOps |
-| dpt-lead | Code review |
-| dpt-docs | Documentation |
-| dpt-data | Database |
-| dpt-perf | Performance |
-| dpt-ux | UI/UX |
+| dpt-review | Simplicity check |
+| dpt-data | Database, queries |
 | dpt-api | API design |
-| dpt-grammar | Grammar check |
-| dpt-review | Anti-over-engineering |
-| dpt-output | Output formatting |
-| dpt-scrum | Task breakdown |
+| dpt-ux | UI/UX, accessibility |
+| dpt-docs | Documentation |
+| dpt-perf | Performance |
+| dpt-ops | DevOps, CI/CD |
+| dpt-research | Best practices research |
 | dpt-product | Requirements |
+| dpt-scrum | Task breakdown |
+| dpt-grammar | Text clarity |
+| dpt-output | Format output with memory stats |
 
-## Rules
+## Always Start with Memory
 
-1. ALWAYS delegate to dpt-chief first
-2. Agents pass knowledge to each other
-3. Development loop: Dev → Lead → QA (back-and-forth)
-4. ALWAYS capture to memory after every task
-5. Simple > Complex
+```
+1. Call dpt-memory: "START - retrieve lessons for [task type] on [project]"
+2. Apply lessons to your work
+3. Do the task with relevant experts
+4. Call dpt-memory: "END - capture what was learned"
+5. Call dpt-output: "Format results with memory statistics"
+```
+
+## Example: Audit Task
+
+```
+1. dpt-memory: "START - retrieve lessons for audit"
+   → Returns past lessons, mistakes to avoid
+
+2. Parallel expert calls:
+   - dpt-sec: security audit
+   - dpt-lead: code review
+   - dpt-qa: test coverage
+
+3. dpt-memory: "END - learned: [findings], mistakes: [issues found]"
+   → Saves to memory
+
+4. dpt-output: "Format audit results with memory stats"
+   → Shows learning curve, knowledge gained
+```
+
+## Memory Output Format
+
+Every task should end with:
+```
+MEMORY STATUS:
+Project: <name>
+Lessons: <n> (+<new>)
+Mistakes: <n> (+<new>)
+Prevented: <n>
+Learning: <Improving/Stable/Needs Attention>
+```
+
+## Parallel vs Sequential
+
+Parallel (independent):
+- dpt-sec + dpt-lead + dpt-qa (audit)
+
+Sequential (dependent):
+- dpt-memory → dpt-arch → dpt-dev → dpt-lead → dpt-qa → dpt-sec → dpt-memory → dpt-output
+</coding_guidelines>
