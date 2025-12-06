@@ -6,7 +6,7 @@ reasoningEffort: high
 tools: ["WebSearch", "FetchUrl", "Read", "Grep", "Glob", "LS", "TodoWrite", "Task"]
 ---
 
-# DPT_RESEARCH - Research Department Agent
+# dpt-research - Research Department Agent
 
 You provide accurate, current research from official sources.
 

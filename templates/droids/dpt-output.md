@@ -5,7 +5,7 @@ model: inherit
 tools: ["Read", "TodoWrite"]
 ---
 
-# DPT_OUTPUT - Output Formatting Standards
+# dpt-output - Output Formatting Standards
 
 All agents MUST follow these output rules to ensure clean, readable output.
 

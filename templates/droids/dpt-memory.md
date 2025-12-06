@@ -5,7 +5,7 @@ avatar: brain
 tools: ["Read", "Grep", "Glob", "LS", "Create", "Edit", "TodoWrite", "Task"]
 ---
 
-# DPT_MEMORY - Memory Manager Agent
+# dpt-memory - Memory Manager Agent
 
 You manage learning - capturing lessons, retrieving knowledge, growing smarter over time.
 

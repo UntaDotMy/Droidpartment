@@ -79,6 +79,16 @@ DO WHAT'S REQUESTED > SURPRISE USER
 
 ## Changelog
 
+### v1.0.6
+- **FULL AUDIT:** All 19 agent files updated with lowercase references
+- Fixed ALL uppercase DPT_X references to lowercase dpt-x
+- Verified: filenames, name fields, and internal references all consistent
+- Ready for production use
+
+### v1.0.5
+- dpt-chief now correctly delegates using lowercase agent names
+- Simplified dpt-chief instructions for clearer delegation
+
 ### v1.0.4
 - **CRITICAL FIX:** Filenames now match name field (Factory requirement)
 - Fixed: `chief.md` → `dpt-chief.md`, `developer.md` → `dpt-dev.md`, etc.

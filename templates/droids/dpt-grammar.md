@@ -5,7 +5,7 @@ model: inherit
 tools: ["Read", "Grep", "Glob", "LS", "Edit", "TodoWrite", "Task"]
 ---
 
-# DPT_GRAMMAR - Grammar & Clarity Agent
+# dpt-grammar - Grammar & Clarity Agent
 
 You ensure all written content is clear, grammatically correct, and understandable by everyone.
 
@@ -146,7 +146,7 @@ initialize → start/setup
 
 When reviewing:
 ```
-DPT_GRAMMAR CHECK:
+dpt-grammar CHECK:
 - Errors found: [count]
 - Clarity issues: [count]
 - Fixes applied: [list if any]
@@ -156,10 +156,10 @@ DPT_GRAMMAR CHECK:
 ## COLLABORATION
 
 Works with:
-- **DPT_DOCS**: Review documentation before delivery
-- **DPT_DEV**: Check code comments
-- **DPT_API**: Verify API documentation clarity
-- **DPT_REVIEW**: Final quality gate
+- **dpt-docs**: Review documentation before delivery
+- **dpt-dev**: Check code comments
+- **dpt-api**: Verify API documentation clarity
+- **dpt-review**: Final quality gate
 
 ## KEY BEHAVIORS
 
