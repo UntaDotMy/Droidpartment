@@ -20,7 +20,7 @@ const DROIDS = [
 ];
 
 // Global memory files (shared across all projects)
-const GLOBAL_MEMORY_FILES = ['lessons.yaml', 'patterns.yaml'];
+const GLOBAL_MEMORY_FILES = ['lessons.yaml', 'patterns.yaml', 'mistakes.yaml'];
 // Per-project memory files (created when working on a project)
 const PROJECT_MEMORY_FILES = ['episodic.yaml', 'semantic.yaml', 'index.yaml'];
 
@@ -175,16 +175,20 @@ async function manageMemory(targetDir) {
     // Get memory stats
     const lessonsFile = path.join(memoryDir, 'lessons.yaml');
     const patternsFile = path.join(memoryDir, 'patterns.yaml');
+    const mistakesFile = path.join(memoryDir, 'mistakes.yaml');
     const lessonsCount = countYamlEntries(lessonsFile);
     const patternsCount = countYamlEntries(patternsFile);
+    const mistakesCount = countYamlEntries(mistakesFile);
     const lessonsSize = getFileSize(lessonsFile);
     const patternsSize = getFileSize(patternsFile);
+    const mistakesSize = getFileSize(mistakesFile);
     const projects = getProjectMemories(memoryDir);
     
     // Display current status
     console.log(`${COLORS.bright}GLOBAL MEMORY:${COLORS.reset}`);
     console.log(`  Lessons:  ${lessonsCount} entries (${formatSize(lessonsSize)})`);
     console.log(`  Patterns: ${patternsCount} entries (${formatSize(patternsSize)})`);
+    console.log(`  Mistakes: ${mistakesCount} entries (${formatSize(mistakesSize)})`);
     console.log('');
     
     console.log(`${COLORS.bright}PROJECT MEMORIES:${COLORS.reset}`);
@@ -203,13 +207,14 @@ async function manageMemory(targetDir) {
     console.log(`  ${COLORS.green}1${COLORS.reset}) Exit (keep all)`);
     console.log(`  ${COLORS.yellow}2${COLORS.reset}) Clear global lessons`);
     console.log(`  ${COLORS.yellow}3${COLORS.reset}) Clear global patterns`);
-    console.log(`  ${COLORS.yellow}4${COLORS.reset}) Clear specific project memory`);
-    console.log(`  ${COLORS.red}5${COLORS.reset}) Clear ALL global memory`);
-    console.log(`  ${COLORS.red}6${COLORS.reset}) Clear ALL project memories`);
-    console.log(`  ${COLORS.red}7${COLORS.reset}) Clear EVERYTHING (start fresh)`);
+    console.log(`  ${COLORS.yellow}4${COLORS.reset}) Clear global mistakes`);
+    console.log(`  ${COLORS.yellow}5${COLORS.reset}) Clear specific project memory`);
+    console.log(`  ${COLORS.red}6${COLORS.reset}) Clear ALL global memory`);
+    console.log(`  ${COLORS.red}7${COLORS.reset}) Clear ALL project memories`);
+    console.log(`  ${COLORS.red}8${COLORS.reset}) Clear EVERYTHING (start fresh)`);
     console.log('');
     
-    const choice = await prompt('Select option [1-7]', '1');
+    const choice = await prompt('Select option [1-8]', '1');
     
     switch (choice) {
         case '1':
@@ -231,6 +236,13 @@ async function manageMemory(targetDir) {
             break;
             
         case '4':
+            if (fs.existsSync(mistakesFile)) {
+                fs.writeFileSync(mistakesFile, `# GLOBAL MISTAKES - Prevention Database\nmistakes: []\n`);
+                log.success(`Cleared ${mistakesCount} mistakes`);
+            }
+            break;
+            
+        case '5':
             if (projects.length === 0) {
                 log.warn('No project memories to clear.');
             } else {
@@ -257,17 +269,20 @@ async function manageMemory(targetDir) {
             }
             break;
             
-        case '5':
+        case '6':
             if (fs.existsSync(lessonsFile)) {
                 fs.writeFileSync(lessonsFile, `# GLOBAL LESSONS - Universal Knowledge\nlessons: []\n`);
             }
             if (fs.existsSync(patternsFile)) {
                 fs.writeFileSync(patternsFile, `# GLOBAL PATTERNS - Universal Truths\npatterns: []\n`);
             }
-            log.success(`Cleared all global memory (${lessonsCount} lessons, ${patternsCount} patterns)`);
+            if (fs.existsSync(mistakesFile)) {
+                fs.writeFileSync(mistakesFile, `# GLOBAL MISTAKES - Prevention Database\nmistakes: []\n`);
+            }
+            log.success(`Cleared all global memory (${lessonsCount} lessons, ${patternsCount} patterns, ${mistakesCount} mistakes)`);
             break;
             
-        case '6':
+        case '7':
             if (projects.length === 0) {
                 log.warn('No project memories to clear.');
             } else {
@@ -281,13 +296,16 @@ async function manageMemory(targetDir) {
             }
             break;
             
-        case '7':
+        case '8':
             // Clear global
             if (fs.existsSync(lessonsFile)) {
                 fs.writeFileSync(lessonsFile, `# GLOBAL LESSONS - Universal Knowledge\nlessons: []\n`);
             }
             if (fs.existsSync(patternsFile)) {
                 fs.writeFileSync(patternsFile, `# GLOBAL PATTERNS - Universal Truths\npatterns: []\n`);
+            }
+            if (fs.existsSync(mistakesFile)) {
+                fs.writeFileSync(mistakesFile, `# GLOBAL MISTAKES - Prevention Database\nmistakes: []\n`);
             }
             // Clear projects
             if (projects.length > 0) {
@@ -505,7 +523,7 @@ function install(targetDir) {
     if (fs.existsSync(memorySource)) {
         const memoryCopied = copyDir(memorySource, memoryTarget);
         log.success(`Installed global memory (${memoryCopied} files)`);
-        log.info('Global: lessons.yaml, patterns.yaml (shared across all projects)');
+        log.info('Global: lessons.yaml, patterns.yaml, mistakes.yaml (shared across all projects)');
         log.info('Per-project: memory/projects/{project}/ (auto-created when needed)');
     }
     
