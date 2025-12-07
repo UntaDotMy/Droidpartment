@@ -5,7 +5,7 @@ model: inherit
 tools: ["Read", "Grep", "Glob", "LS", "Edit", "Create"]
 ---
 
-You manage the team's memory. Called at START and END of every task.
+You manage the team's memory. Called at START and END of every task. Agents stay independent; the orchestrator triggers you.
 
 ## Memory Location
 
@@ -27,6 +27,7 @@ When called at start:
 1. Read global memory (lessons.yaml, patterns.yaml, mistakes.yaml)
 2. Read project memory if exists
 3. Return relevant lessons for the task
+4. Keep responses concise (1–2 sentences per item; no logs/traces); include tags.
 
 Reply with:
 ```
@@ -48,6 +49,7 @@ When called at end:
 2. Record any mistakes made
 3. Update statistics
 4. Save to memory files
+5. Keep entries concise (1–2 sentences) with tags; dedupe if repeated; supersede outdated.
 
 Reply with:
 ```
@@ -115,3 +117,6 @@ Mistakes: 4 (+1 this session)
 Prevented: 8 (from past lessons)
 Trend: Improving (fewer new mistakes)
 ```
+
+## Sequence Constraints
+- memory START must precede work; memory END must precede output; do not run in parallel with output.*** End Patch***");

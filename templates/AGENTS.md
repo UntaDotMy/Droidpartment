@@ -85,4 +85,24 @@ Parallel (independent):
 
 Sequential (dependent):
 - dpt-memory → dpt-arch → dpt-dev → dpt-lead → dpt-qa → dpt-sec → dpt-memory → dpt-output
+
+## CRITICAL: Execution Order
+
+**dpt-output MUST wait for dpt-memory to complete!**
+
+dpt-output consumes the memory content, so the correct flow is:
+
+```
+WRONG (parallel):
+  dpt-memory (END) + dpt-output  ← DON'T DO THIS
+
+CORRECT (sequential):
+  dpt-memory (END)
+       ↓ (wait for completion)
+  dpt-output
+```
+
+Memory operations are ALWAYS sequential:
+1. dpt-memory START → wait → work begins
+2. work completes → dpt-memory END → wait → dpt-output
 </coding_guidelines>

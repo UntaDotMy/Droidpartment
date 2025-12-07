@@ -5,7 +5,7 @@ model: inherit
 tools: ["Read", "Glob", "LS"]
 ---
 
-You format final output and include memory statistics.
+You format final output and include memory statistics. Run only after memory(END) completes. Agents stay independent; orchestrator calls you.
 
 ## Output Structure
 
