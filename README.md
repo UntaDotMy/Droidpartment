@@ -15,8 +15,8 @@
 <p align="center">
   <a href="#-quick-start">Quick Start</a> •
   <a href="#-the-experts">The Experts</a> •
-  <a href="#-memory-system">Memory System</a> •
-  <a href="#-task-flows">Task Flows</a> •
+  <a href="#-mandatory-workflow">Workflow</a> •
+  <a href="#-memory-system">Memory</a> •
   <a href="#-commands">Commands</a>
 </p>
 
@@ -38,17 +38,18 @@
 
 ## 🧠 What Is This?
 
-**Droidpartment** is a team of 18 specialized AI agents for [Factory AI](https://factory.ai) that work together like a real software development department.
+**Droidpartment** is a team of 18 specialized AI agents for [Factory AI](https://factory.ai) that work together like a real software development department. The main droid **delegates** to experts instead of doing everything itself.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  YOU: "audit this project"                                      │
+│  YOU: "fix the bug in auth"                                     │
 │                                                                 │
-│  DROIDPARTMENT:                                                 │
-│    ├── 🛡️  dpt-sec    → Security audit (OWASP, CWE)            │
-│    ├── 👨‍💻 dpt-lead   → Code review (SOLID, clean code)        │
-│    ├── 🧪 dpt-qa     → Test coverage (pyramid analysis)        │
-│    └── 📊 dpt-output → Results + learning stats                │
+│  MAIN DROID: (follows mandatory workflow)                       │
+│    1. dpt-memory  → "START - bug fix for auth"                 │
+│    2. dpt-dev     → Implements the fix                         │
+│    3. dpt-qa      → Tests the fix                              │
+│    4. dpt-memory  → "END - captures lessons"                   │
+│    5. dpt-output  → Formats results with stats                 │
 │                                                                 │
 │  MEMORY: Lessons: 12 (+3) | Mistakes Prevented: 5               │
 └─────────────────────────────────────────────────────────────────┘
@@ -61,6 +62,7 @@
 - ⚡ **Parallel Execution** - Run independent audits simultaneously
 - 📈 **Learning Curve** - Gets smarter with every session
 - 🔄 **PDCA Cycle** - Plan-Do-Check-Act methodology built-in
+- ✅ **Mandatory Workflow** - Main droid MUST delegate to experts
 
 ---
 
@@ -80,7 +82,32 @@ npx droidpartment
 2. Go to **Experimental** → Enable **Custom Droids**
 3. Restart CLI
 
-**That's it!** Now just describe your task naturally.
+**That's it!** The main droid will now follow the mandatory workflow.
+
+---
+
+## ⚠️ Mandatory Workflow
+
+**The main droid MUST use custom droids. It should NOT code directly.**
+
+### Task Classification
+
+| User Request Contains | Task Type | Required Flow |
+|----------------------|-----------|---------------|
+| "audit", "review", "check" | AUDIT | memory → sec+lead+qa+perf → memory → output |
+| "fix", "bug", "error" | BUG_FIX | memory → dev → qa → memory → output |
+| "add", "create", "build" | FEATURE | memory → product → arch → scrum → dev → qa → sec → memory → output |
+| "update", "change" | IMPLEMENTATION | memory → scrum → dev → lead → qa → memory → output |
+
+### The Rules
+
+```
+RULE 1: ALWAYS start with dpt-memory
+RULE 2: Classify task → follow REQUIRED flow
+RULE 3: NEVER code directly → use dpt-dev
+RULE 4: NEVER skip steps
+RULE 5: Memory END → then Output (sequential)
+```
 
 ---
 
@@ -107,7 +134,7 @@ npx droidpartment
 ### 💻 Implementation
 | Agent | Role |
 |-------|------|
-| `dpt-dev` | Code implementation |
+| `dpt-dev` | **ALL code implementation** |
 | `dpt-data` | Database, queries |
 | `dpt-api` | API design (REST) |
 | `dpt-ux` | UI/UX, accessibility |
@@ -137,55 +164,46 @@ npx droidpartment
 
 ---
 
-## 🔄 Task Flows
+## 🔄 Example Flows
 
-Choose the right flow for your task:
-
-### 🆕 Feature Development
+### Bug Fix Flow
 ```
-memory(START) → product → arch → scrum
-      ↓
-    dev → data/api/ux
-      ↓
-qa + lead + sec + review  ←── PARALLEL
-      ↓
-memory(END) → output
+1. dpt-memory  → "START - bug fix for [issue]"     WAIT
+2. dpt-dev     → "Fix the bug in [file]"           WAIT
+3. dpt-qa      → "Test the fix"                    WAIT
+4. dpt-memory  → "END - bug fixed, lessons..."     WAIT
+5. dpt-output  → "Format results"                  LAST
 ```
 
-### 🐛 Bug Fix
+### Feature Flow
 ```
-memory(START) → research (reproduce)
-      ↓
-   5 Whys (root cause)
-      ↓
-  dev (fix) → qa (regression test)
-      ↓
-memory(END) → output
-```
-
-### 🔍 Audit
-```
-memory(START)
-      ↓
-sec + lead + qa + review + perf  ←── ALL PARALLEL
-      ↓
-memory(END) → output
+1. dpt-memory  → "START - new feature [name]"      WAIT
+2. dpt-product → "Define requirements"             WAIT
+3. dpt-arch    → "Design architecture"             WAIT
+4. dpt-scrum   → "Break down tasks"                WAIT
+5. dpt-dev     → "Implement feature"               WAIT
+6. dpt-qa      → "Test feature"                    PARALLEL
+7. dpt-sec     → "Security check"                  PARALLEL
+8. dpt-memory  → "END - feature complete"          WAIT
+9. dpt-output  → "Format results"                  LAST
 ```
 
-### 📈 Improvement
+### Audit Flow
 ```
-memory(START) → perf (BASELINE)
-      ↓
-dev (change) → perf (MEASURE)
-      ↓
-memory(END) → output (before/after)
+1. dpt-memory  → "START - audit [project]"         WAIT
+2. dpt-sec     → "Security audit"                  PARALLEL
+3. dpt-lead    → "Code review"                     PARALLEL
+4. dpt-qa      → "Test coverage"                   PARALLEL
+5. dpt-perf    → "Performance check"               PARALLEL
+6. dpt-memory  → "END - audit complete"            WAIT
+7. dpt-output  → "Format results"                  LAST
 ```
 
 ---
 
 ## 🧠 Memory System
 
-The secret sauce - **Droidpartment learns from every task!**
+**Droidpartment learns from every task!**
 
 ```
 ~/.factory/memory/
@@ -216,19 +234,19 @@ Learning: 📈 Improving
 
 ---
 
-## 📖 How to Call Agents
+## 📖 How Agents Are Called
 
 **Use Task tool (NOT Skill tool!):**
 
 ```javascript
 Task(
-  subagent_type: "dpt-sec",
-  description: "Security audit",
-  prompt: "Audit security of this project"
+  subagent_type: "dpt-dev",
+  description: "Implement feature",
+  prompt: "Implement [requirement] in [file]. Follow existing patterns."
 )
 ```
 
-### Parallel Execution (Independent)
+### Parallel (Independent)
 ```javascript
 // These can run at the same time!
 Task(subagent_type: "dpt-sec", ...)
@@ -236,9 +254,8 @@ Task(subagent_type: "dpt-lead", ...)
 Task(subagent_type: "dpt-qa", ...)
 ```
 
-### Sequential Execution (Dependent)
+### Sequential (Must Wait)
 ```javascript
-// Must wait for each to complete
 Task(subagent_type: "dpt-memory", prompt: "START...")  // WAIT
 Task(subagent_type: "dpt-dev", ...)                     // WAIT
 Task(subagent_type: "dpt-memory", prompt: "END...")    // WAIT
@@ -272,11 +289,12 @@ Task(subagent_type: "dpt-output", ...)                  // LAST
 
 ```
 ┌────────────────────────────────────────┐
-│  🎯 SIMPLE > COMPLEX                   │
+│  🎯 DELEGATE > DO IT YOURSELF          │
 │  👨‍💻 EXPERT > GENERALIST               │
 │  ⚡ PARALLEL > SEQUENTIAL (when safe)  │
 │  🧠 LEARN FROM EVERY MISTAKE           │
 │  📈 GET SMARTER EVERY RUN              │
+│  ✅ FOLLOW THE WORKFLOW                │
 └────────────────────────────────────────┘
 ```
 
@@ -288,6 +306,7 @@ Task(subagent_type: "dpt-output", ...)                  // LAST
 - [x] Memory system with learning
 - [x] PDCA task flows
 - [x] Parallel execution
+- [x] Mandatory workflow enforcement
 - [ ] Web dashboard for memory visualization
 - [ ] Cross-project pattern sharing
 - [ ] Team memory sync
