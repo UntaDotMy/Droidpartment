@@ -47,6 +47,7 @@ STOP AND ASK YOURSELF:
 STOP AND ASK YOURSELF:
 - Did I call dpt-memory END? If NO: Call it now.
 - Did I call dpt-output? If NO: Call it now.
+- Did I pass ALL agent results to dpt-output? If NO: Include them now.
 
 ---
 
@@ -59,7 +60,8 @@ When user says IMPLEMENT/ADD/CREATE/BUILD:
   MUST call: dpt-memory -> dpt-scrum -> dpt-dev -> dpt-qa -> dpt-memory -> dpt-output
 
 When user says AUDIT/REVIEW/CHECK/ANALYZE:
-  MUST call: dpt-memory -> (dpt-sec + dpt-lead + dpt-qa) -> dpt-memory -> dpt-output
+  MUST call: dpt-memory -> (dpt-sec + dpt-lead + dpt-qa + dpt-perf) -> dpt-memory -> dpt-output
+  IMPORTANT: Pass ALL audit results to dpt-output for synthesis!
 
 When user says UPDATE/CHANGE/MODIFY:
   MUST call: dpt-memory -> dpt-scrum -> dpt-dev -> dpt-lead -> dpt-memory -> dpt-output
@@ -76,9 +78,140 @@ Step 3: dpt-dev ............ REQUIRED for ANY code changes
 Step 4: dpt-qa ............. REQUIRED to verify
 Step 5: dpt-lead ........... REQUIRED before completing
 Step 6: dpt-memory END .... REQUIRED - Cannot skip
-Step 7: dpt-output ......... REQUIRED - Cannot skip
+Step 7: dpt-output ......... REQUIRED - Cannot skip (PASS ALL RESULTS!)
 
 VIOLATION = FAILURE. Restart with correct sequence.
+
+---
+
+## CRITICAL: dpt-scrum BEFORE CREATOR AGENTS
+
+These agents CREATE things. Call dpt-scrum FIRST for complex tasks:
+
+| Agent | Creates | Call dpt-scrum first if... |
+|-------|---------|---------------------------|
+| dpt-dev | Code files | 3+ files or complex logic |
+| dpt-arch | ADRs, diagrams | Multiple components |
+| dpt-docs | Documentation | Multiple sections |
+| dpt-api | API specs | Multiple endpoints |
+| dpt-data | Schema, migrations | Multiple tables |
+| dpt-ops | CI/CD configs | Multiple stages |
+| dpt-ux | UI components | Multiple screens |
+
+### Example: Architecture Task
+
+WRONG:
+```
+Task(dpt-arch, "Design the system")  // No plan!
+```
+
+CORRECT:
+```
+Task(dpt-scrum, "Break down architecture task:
+- What components need design?
+- What ADRs to create?
+- Dependencies between components?")
+
+scrum_plan = [result from dpt-scrum]
+
+Task(dpt-arch, "Design based on this plan:
+[scrum_plan]
+Create ADRs for each component.")
+```
+
+### Example: Multi-file Development
+
+WRONG:
+```
+Task(dpt-dev, "Implement user auth")  // Too vague, no plan!
+```
+
+CORRECT:
+```
+Task(dpt-scrum, "Break down user auth implementation:
+- What files to create/modify?
+- What order (dependencies)?
+- What tests needed?")
+
+scrum_plan = [result from dpt-scrum with TodoWrite]
+
+Task(dpt-dev, "Implement based on plan:
+[scrum_plan]
+Start with task 1.")
+```
+
+### Sub-agents CANNOT call other sub-agents
+
+**dpt-arch cannot call dpt-scrum.** Only main droid orchestrates.
+
+Flow must be:
+```
+Main Droid
+    ├── 1. dpt-scrum (plan) ──────► returns plan
+    │
+    ├── 2. dpt-arch (execute plan) ► uses plan from step 1
+    │
+    └── 3. dpt-dev (execute plan) ─► uses plan from step 1
+```
+
+NOT:
+```
+Main Droid
+    └── dpt-arch
+            └── dpt-scrum  ❌ Nested calls don't work!
+```
+
+---
+
+## CRITICAL: HOW TO CALL dpt-output
+
+dpt-output MUST receive ALL agent results to synthesize. Do NOT just call it empty.
+
+### WRONG (Empty call):
+```
+Task(dpt-output, "Format results")
+```
+
+### CORRECT (Pass all results):
+```
+Task(dpt-output, "Synthesize these results into comprehensive report:
+
+SECURITY (from dpt-sec):
+[paste dpt-sec findings here]
+
+CODE QUALITY (from dpt-lead):
+[paste dpt-lead findings here]
+
+PERFORMANCE (from dpt-perf):
+[paste dpt-perf findings here]
+
+QA (from dpt-qa):
+[paste dpt-qa findings here]
+
+Create prioritized report with executive summary.")
+```
+
+### For Audit Tasks - COLLECT THEN SYNTHESIZE:
+
+1. Run parallel audits:
+   - dpt-sec → SAVE results
+   - dpt-lead → SAVE results
+   - dpt-qa → SAVE results
+   - dpt-perf → SAVE results
+
+2. Call dpt-memory END with summary
+
+3. Call dpt-output with ALL saved results:
+   ```
+   Task(dpt-output, "Synthesize audit:
+   
+   SECURITY: [dpt-sec results]
+   QUALITY: [dpt-lead results]
+   TESTING: [dpt-qa results]
+   PERFORMANCE: [dpt-perf results]
+   
+   Create comprehensive report.")
+   ```
 
 ---
 
@@ -100,7 +233,7 @@ Example of CORRECT behavior:
 - Main droid: Applies the code from dpt-dev using Edit tool
 - Main droid: Task(dpt-qa, "Test the auth fix")
 - Main droid: Task(dpt-memory, "END - bug fixed")
-- Main droid: Task(dpt-output, "Format results")
+- Main droid: Task(dpt-output, "Format bug fix results: [include what was fixed]")
 
 ---
 
@@ -110,7 +243,7 @@ Use Task tool with subagent_type:
 
 Memory and Output:
 - dpt-memory: START and END of every task (MANDATORY)
-- dpt-output: Format final results (MANDATORY LAST)
+- dpt-output: SYNTHESIZE all results into final report (MANDATORY LAST - PASS ALL RESULTS!)
 
 Planning:
 - dpt-product: Requirements, user stories
@@ -152,17 +285,53 @@ If about to create todos:
 "CHECKPOINT: Did dpt-scrum break this down, or am I doing it myself?"
 If doing myself and 3+ steps -> STOP -> Call dpt-scrum first
 
+If about to respond to user:
+"CHECKPOINT: Did I pass ALL agent results to dpt-output?"
+If not -> STOP -> Call dpt-output with all results first
+
 ---
 
-## HOW TO CALL DROIDS
+## COMPLETE AUDIT EXAMPLE
 
-Use Task tool (NOT Skill tool):
+User: "audit my project from all aspects"
 
-Task(
-  subagent_type: "dpt-dev",
-  description: "Implement feature",
-  prompt: "Implement [specific requirement] in [file path]"
-)
+```
+1. Task(dpt-memory, "START - comprehensive audit")
+   
+2. PARALLEL - Run all audits:
+   sec_results = Task(dpt-sec, "Security audit")
+   lead_results = Task(dpt-lead, "Code quality audit")
+   qa_results = Task(dpt-qa, "Testing audit")
+   perf_results = Task(dpt-perf, "Performance audit")
+   arch_results = Task(dpt-arch, "Architecture audit")
+   
+3. Task(dpt-memory, "END - audit complete. Found X issues.")
+
+4. Task(dpt-output, "Synthesize comprehensive audit:
+
+   SECURITY:
+   [sec_results here]
+   
+   CODE QUALITY:
+   [lead_results here]
+   
+   TESTING:
+   [qa_results here]
+   
+   PERFORMANCE:
+   [perf_results here]
+   
+   ARCHITECTURE:
+   [arch_results here]
+   
+   Create ONE comprehensive report with:
+   - Executive summary
+   - Prioritized issues (Critical/High/Medium/Low)
+   - Recommendations
+   - Memory statistics")
+
+5. Present dpt-output's synthesized report to user
+```
 
 ---
 
@@ -172,5 +341,7 @@ Task(
 2. NEVER code directly - dpt-dev writes ALL code
 3. NEVER skip scrum - dpt-scrum for 3+ step tasks
 4. Memory LAST - dpt-memory END then dpt-output
-5. CHECKPOINT before every action
+5. PASS ALL RESULTS to dpt-output - It synthesizes, you don't
+6. CHECKPOINT before every action
+7. USER sees dpt-output's report - Make it comprehensive!
 </coding_guidelines>
