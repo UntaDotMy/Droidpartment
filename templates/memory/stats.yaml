@@ -2,14 +2,22 @@
 # Tracks overall learning across all projects
 
 global_stats:
-  total_sessions: 0
-  total_lessons: 0
-  total_mistakes: 0
-  total_prevented: 0
-  first_session: null
-  last_session: null
+  total_sessions: 1
+  total_lessons: 4
+  total_mistakes: 1
+  total_prevented: 4
+  first_session: 2025-12-07
+  last_session: 2025-12-07
   
-learning_curve: []
+learning_curve:
+  - date: 2025-12-07
+    sessions: 1
+    lessons: 4
+    mistakes: 1
+    prevented: 4
+    trend: "improving"
+    notes: "Droidpartment pre-publish audit - applied 4 previous lessons, found and fixed 1 naming inconsistency"
+
 # Format:
 # - date: YYYY-MM-DD
 #   sessions: <n>

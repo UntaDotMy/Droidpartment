@@ -10,7 +10,7 @@ const PROJECT_DIR = path.join(process.cwd(), '.factory');
 
 // Get version from package.json
 const PACKAGE_JSON = require(path.join(__dirname, '..', 'package.json'));
-const CURRENT_VERSION = PACKAGE_JSON.version;
+const CURRENT_VERSION = PACKAGE_JSON.version; // 3.0.4
 
 const DROIDS = [
     'dpt-memory', 'dpt-research', 'dpt-scrum', 'dpt-product', 'dpt-arch', 
@@ -92,7 +92,7 @@ function getInstalledVersion(targetDir) {
     }
     // Check if droids exist but no version file (legacy install)
     const droidsDir = path.join(targetDir, 'droids');
-    if (fs.existsSync(droidsDir) && fs.existsSync(path.join(droidsDir, 'dpt-chief.md'))) {
+    if (fs.existsSync(droidsDir) && fs.existsSync(path.join(droidsDir, 'dpt-memory.md'))) {
         return 'legacy';
     }
     return null;
@@ -135,17 +135,17 @@ function getProjectMemories(memoryDir) {
     for (const entry of entries) {
         if (entry.isDirectory()) {
             const projectPath = path.join(projectsDir, entry.name);
-            const episodes = countYamlEntries(path.join(projectPath, 'episodic.yaml'));
-            const knowledge = countYamlEntries(path.join(projectPath, 'semantic.yaml'));
-            const size = getFileSize(path.join(projectPath, 'episodic.yaml')) +
-                        getFileSize(path.join(projectPath, 'semantic.yaml')) +
-                        getFileSize(path.join(projectPath, 'index.yaml'));
+            const lessons = countYamlEntries(path.join(projectPath, 'knowledge.yaml'));
+            const mistakes = countYamlEntries(path.join(projectPath, 'mistakes.yaml'));
+            const size = getFileSize(path.join(projectPath, 'knowledge.yaml')) +
+                        getFileSize(path.join(projectPath, 'mistakes.yaml')) +
+                        getFileSize(path.join(projectPath, 'stats.yaml'));
             
-            if (episodes > 0 || knowledge > 0 || size > 0) {
+            if (lessons > 0 || mistakes > 0 || size > 0) {
                 projects.push({
                     name: entry.name,
-                    episodes,
-                    knowledge,
+                    lessons,
+                    mistakes,
                     size
                 });
             }
@@ -196,7 +196,7 @@ async function manageMemory(targetDir) {
         console.log('  (none yet)');
     } else {
         for (const proj of projects) {
-            console.log(`  ${COLORS.cyan}${proj.name}${COLORS.reset}: ${proj.episodes} episodes, ${proj.knowledge} knowledge (${formatSize(proj.size)})`);
+            console.log(`  ${COLORS.cyan}${proj.name}${COLORS.reset}: ${proj.lessons} lessons, ${proj.mistakes} mistakes (${formatSize(proj.size)})`);
         }
     }
     console.log('');
@@ -250,7 +250,7 @@ async function manageMemory(targetDir) {
                 console.log('Which project memory to clear?');
                 console.log('');
                 projects.forEach((proj, i) => {
-                    console.log(`  ${COLORS.yellow}${i + 1}${COLORS.reset}) ${proj.name} (${proj.episodes} episodes, ${proj.knowledge} knowledge)`);
+                    console.log(`  ${COLORS.yellow}${i + 1}${COLORS.reset}) ${proj.name} (${proj.lessons} lessons, ${proj.mistakes} mistakes)`);
                 });
                 console.log(`  ${COLORS.green}0${COLORS.reset}) Cancel`);
                 console.log('');
@@ -488,7 +488,7 @@ ${COLORS.bright}${COLORS.cyan}
                                                                               
 ${COLORS.reset}
            ${COLORS.bright}Autonomous Software Development Department${COLORS.reset}
-                      ${COLORS.cyan}19 Specialized AI Agents (DPT_*)${COLORS.reset}
+                      ${COLORS.cyan}18 Expert Agents (dpt-*)${COLORS.reset}
                               ${COLORS.yellow}v${CURRENT_VERSION}${COLORS.reset}
 `);
 }
@@ -563,39 +563,69 @@ function install(targetDir) {
 }
 
 function showAgentList() {
-    console.log(`${COLORS.bright}Agents included:${COLORS.reset}`);
+    console.log(`${COLORS.bright}18 Expert Agents (called via Task tool):${COLORS.reset}`);
     console.log('');
-    console.log('  Leader:');
-    console.log('  • chief          - TEAM LEADER (entry point)');
+    console.log('  Memory & Output (SEQUENTIAL - must wait):');
+    console.log('  • dpt-memory     - Learning system (START/END of tasks)');
+    console.log('  • dpt-output     - Format results with memory stats');
     console.log('');
-    console.log('  Core Team:');
-    console.log('  • memory         - Human-like learning system');
-    console.log('  • research       - Deep research, current content');
-    console.log('  • scrum-master   - Task decomposition, DAG planning');
-    console.log('  • product-owner  - Requirements, user stories');
-    console.log('  • architect      - System design, patterns');
-    console.log('  • developer      - Implementation, coding');
-    console.log('  • tech-lead      - Code review, SOLID');
-    console.log('  • qa-engineer    - Testing strategies');
-    console.log('  • security       - OWASP 2025, vulnerabilities');
-    console.log('  • devops         - CI/CD, deployment');
+    console.log('  Planning (SEQUENTIAL):');
+    console.log('  • dpt-product    - Requirements, user stories');
+    console.log('  • dpt-research   - Best practices from official docs');
+    console.log('  • dpt-arch       - Architecture, ADRs, patterns');
+    console.log('  • dpt-scrum      - Task breakdown, dependencies');
     console.log('');
-    console.log('  Specialists:');
-    console.log('  • documentation  - Clear, concise docs');
-    console.log('  • database       - Schema, queries, data');
-    console.log('  • performance    - Optimization (measure first)');
-    console.log('  • ux-ui          - Simple, accessible interfaces');
-    console.log('  • api-design     - RESTful, consistent APIs');
-    console.log('  • grammar        - Grammar, clarity checker');
-    console.log('  • reviewer       - Anti-over-engineering guard');
-    console.log('  • output-rules   - Output formatting standards');
+    console.log('  Implementation:');
+    console.log('  • dpt-dev        - Code implementation');
+    console.log('  • dpt-data       - Database, queries, indexes');
+    console.log('  • dpt-api        - API design, REST');
+    console.log('  • dpt-ux         - UI/UX, accessibility');
+    console.log('  • dpt-ops        - DevOps, CI/CD');
     console.log('');
-    console.log('  Memory System (Grows Smarter Over Time):');
-    console.log('  • GLOBAL: Lessons & patterns shared across ALL projects');
-    console.log('  • PER-PROJECT: Specific knowledge per project (never mixed)');
-    console.log('  • Starts empty like a child, becomes expert over time');
-    console.log('  • More sessions = less mistakes = smarter');
+    console.log('  Quality (CAN BE PARALLEL):');
+    console.log('  • dpt-sec        - Security (OWASP, CWE)');
+    console.log('  • dpt-lead       - Code review (SOLID)');
+    console.log('  • dpt-qa         - Testing (pyramid)');
+    console.log('  • dpt-review     - Simplicity check');
+    console.log('  • dpt-perf       - Performance (measure first!)');
     console.log('');
+    console.log('  Support:');
+    console.log('  • dpt-docs       - Documentation');
+    console.log('  • dpt-grammar    - Grammar, clarity');
+    console.log('');
+    console.log('  Memory System:');
+    console.log('  • GLOBAL: lessons, patterns, mistakes (all projects)');
+    console.log('  • PER-PROJECT: knowledge per project');
+    console.log('  • Learning curve tracked over time');
+    console.log('');
+}
+
+function showHelp() {
+    console.log(`
+${COLORS.bright}Droidpartment${COLORS.reset} - 18 Expert AI Agents for Factory AI
+
+${COLORS.bright}USAGE:${COLORS.reset}
+  npx droidpartment [options]
+
+${COLORS.bright}OPTIONS:${COLORS.reset}
+  ${COLORS.green}(no args)${COLORS.reset}       Install or update Droidpartment
+  ${COLORS.yellow}--memory, -m${COLORS.reset}    Manage/clean memory files
+  ${COLORS.red}--uninstall, -u${COLORS.reset} Remove Droidpartment
+  ${COLORS.cyan}--yes, -y${COLORS.reset}       Auto-confirm prompts (for CI/scripts)
+  ${COLORS.cyan}--project${COLORS.reset}       Force project-level install (.factory/)
+  ${COLORS.cyan}--update${COLORS.reset}        Force update even if same version
+  ${COLORS.cyan}--version, -v${COLORS.reset}   Show version number
+  ${COLORS.cyan}--help, -h${COLORS.reset}      Show this help message
+
+${COLORS.bright}EXAMPLES:${COLORS.reset}
+  npx droidpartment              # Interactive install
+  npx droidpartment -y           # Auto-install to personal dir
+  npx droidpartment --memory     # Manage memory files
+  npx droidpartment -u -y        # Auto-uninstall
+
+${COLORS.bright}LEARN MORE:${COLORS.reset}
+  https://github.com/UntaDotMy/Droidpartment
+`);
 }
 
 async function main() {
@@ -605,6 +635,20 @@ async function main() {
     const autoYes = args.includes('--yes') || args.includes('-y');
     const forceProject = args.includes('--project');
     const forceUpdate = args.includes('--update');
+    const showVersion = args.includes('--version') || args.includes('-v');
+    const showHelpFlag = args.includes('--help') || args.includes('-h');
+    
+    // Handle --version
+    if (showVersion) {
+        console.log(`droidpartment v${CURRENT_VERSION}`);
+        return;
+    }
+    
+    // Handle --help
+    if (showHelpFlag) {
+        showHelp();
+        return;
+    }
     
     showBanner();
     

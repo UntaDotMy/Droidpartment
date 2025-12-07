@@ -1,6 +1,6 @@
 {
   "name": "droidpartment",
-  "version": "3.0.2",
+  "version": "3.0.4",
   "description": "18 Expert Agents - Call specialists directly for security, code review, testing, architecture, and more. Parallel or sequential.",
   "author": "Nasri",
   "license": "MIT",
@@ -28,7 +28,11 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/droidpartment"
+    "url": "https://github.com/UntaDotMy/Droidpartment"
+  },
+  "homepage": "https://github.com/UntaDotMy/Droidpartment#readme",
+  "bugs": {
+    "url": "https://github.com/UntaDotMy/Droidpartment/issues"
   },
   "engines": {
     "node": ">=16.0.0"

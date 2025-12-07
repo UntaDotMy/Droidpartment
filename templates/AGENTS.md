@@ -1,108 +1,158 @@
 <coding_guidelines>
 # Droidpartment - 18 Expert Agents
 
-Call specialists directly. Always use memory at start and end.
+## HOW TO CALL AGENTS
 
-## Task Flow
+**USE TASK TOOL, NOT SKILL TOOL!**
+
+```javascript
+Task(
+  subagent_type: "dpt-memory",
+  description: "Retrieve lessons",
+  prompt: "START - [task type] for [project]"
+)
+```
+
+## PDCA Learning Cycle (Every Task)
 
 ```
-START: dpt-memory (retrieve lessons)
-  ↓
-WORK: Call relevant experts (parallel or sequential)
-  ↓
-END: dpt-memory (capture lessons)
-  ↓
-OUTPUT: dpt-output (format with memory stats)
+PLAN  → dpt-memory START, define scope, retrieve lessons
+DO    → Execute with expert agents
+CHECK → Verify quality, run audits (parallel OK)
+ACT   → dpt-memory END, capture lessons, dpt-output
+```
+
+## Task Flows (Choose Based on Task Type)
+
+### Feature Development
+```
+PLAN:  memory(START) → product → research → arch → scrum
+DO:    dev → data/api/ux (as needed)
+CHECK: qa + lead + sec + review + perf (PARALLEL)
+ACT:   docs → memory(END) → output
+```
+
+### Bug Fix
+```
+PLAN:  memory(START) → research (reproduce)
+DO:    5 Whys → dev (fix root cause) → qa (regression test)
+CHECK: qa + lead + sec (PARALLEL)
+ACT:   memory(END) → output (include prevention)
+```
+
+### Research / Understanding
+```
+PLAN:  memory(START) → define questions
+DO:    research → arch (analyze)
+CHECK: review (simplest approach?)
+ACT:   memory(END) → output (with sources)
+```
+
+### Audit / Review
+```
+PLAN:  memory(START)
+DO:    sec + lead + qa + review + perf (ALL PARALLEL)
+CHECK: consolidate + prioritize
+ACT:   memory(END) → output (action items)
+```
+
+### Improvement / Refactoring
+```
+PLAN:  memory(START) → perf (MEASURE BASELINE)
+DO:    dev (small changes) → perf (MEASURE AFTER)
+CHECK: qa + lead + sec + review (PARALLEL)
+ACT:   memory(END) → output (before/after metrics)
 ```
 
 ## The 18 Experts
 
-| Expert | Specialty |
-|--------|-----------|
-| dpt-memory | Lessons, mistakes, knowledge tracking |
-| dpt-sec | Security audits, OWASP |
-| dpt-lead | Code review, best practices |
-| dpt-qa | Testing, coverage |
-| dpt-arch | Architecture, design patterns |
-| dpt-dev | Implementation |
-| dpt-review | Simplicity check |
-| dpt-data | Database, queries |
-| dpt-api | API design |
-| dpt-ux | UI/UX, accessibility |
-| dpt-docs | Documentation |
-| dpt-perf | Performance |
-| dpt-ops | DevOps, CI/CD |
-| dpt-research | Best practices research |
-| dpt-product | Requirements |
-| dpt-scrum | Task breakdown |
-| dpt-grammar | Text clarity |
-| dpt-output | Format output with memory stats |
+| Agent | Role | When to Use |
+|-------|------|-------------|
+| dpt-memory | Learning system | ALWAYS first and last |
+| dpt-output | Format + stats | ALWAYS last (after memory) |
+| dpt-product | Requirements | Feature planning |
+| dpt-research | Best practices | Any research needed |
+| dpt-arch | Architecture, ADRs | Design decisions |
+| dpt-scrum | Task breakdown | Complex tasks |
+| dpt-dev | Implementation | Coding |
+| dpt-data | Database | Schema, queries |
+| dpt-api | API design | Endpoints |
+| dpt-ux | UI/UX | Interface design |
+| dpt-sec | Security | Audits, vulnerability checks |
+| dpt-lead | Code review | Quality checks |
+| dpt-qa | Testing | Test coverage |
+| dpt-review | Simplicity | Complexity checks |
+| dpt-perf | Performance | Optimization (measure!) |
+| dpt-ops | DevOps | CI/CD, deployment |
+| dpt-docs | Documentation | Docs, README |
+| dpt-grammar | Grammar | Text clarity |
 
-## Always Start with Memory
+## Parallel vs Sequential
 
+**CAN be parallel (independent):**
 ```
-1. Call dpt-memory: "START - retrieve lessons for [task type] on [project]"
-2. Apply lessons to your work
-3. Do the task with relevant experts
-4. Call dpt-memory: "END - capture what was learned"
-5. Call dpt-output: "Format results with memory statistics"
+dpt-sec + dpt-lead + dpt-qa + dpt-review + dpt-perf
 ```
 
-## Example: Audit Task
-
+**MUST be sequential:**
 ```
-1. dpt-memory: "START - retrieve lessons for audit"
-   → Returns past lessons, mistakes to avoid
-
-2. Parallel expert calls:
-   - dpt-sec: security audit
-   - dpt-lead: code review
-   - dpt-qa: test coverage
-
-3. dpt-memory: "END - learned: [findings], mistakes: [issues found]"
-   → Saves to memory
-
-4. dpt-output: "Format audit results with memory stats"
-   → Shows learning curve, knowledge gained
+dpt-memory(START) → [work] → dpt-memory(END) → dpt-output
+dpt-perf(baseline) → [change] → dpt-perf(measure)
 ```
 
-## Memory Output Format
+## Memory Capture
 
-Every task should end with:
+### At Task End, Capture:
+
+**Lessons** (what worked):
+```yaml
+lesson: "<what learned>"
+context: "<when to apply>"
+evidence: "<proof it works>"
+```
+
+**Mistakes** (what to avoid):
+```yaml
+mistake: "<what went wrong>"
+root_cause: "<5 Whys result>"
+prevention: "<how to avoid>"
+```
+
+**Patterns** (reusable solutions):
+```yaml
+pattern: "<name>"
+problem: "<what it solves>"
+solution: "<how to apply>"
+```
+
+## Learning Metrics
+
+```
+IMPROVING:    Prevented > New mistakes
+STABLE:       Prevented = New mistakes  
+NEEDS_ATTENTION: Prevented < New mistakes
+```
+
+## Output Format
+
+Every task ends with:
 ```
 MEMORY STATUS:
 Project: <name>
 Lessons: <n> (+<new>)
 Mistakes: <n> (+<new>)
 Prevented: <n>
-Learning: <Improving/Stable/Needs Attention>
+Learning: Improving/Stable/Needs Attention
 ```
 
-## Parallel vs Sequential
-
-Parallel (independent):
-- dpt-sec + dpt-lead + dpt-qa (audit)
-
-Sequential (dependent):
-- dpt-memory → dpt-arch → dpt-dev → dpt-lead → dpt-qa → dpt-sec → dpt-memory → dpt-output
-
-## CRITICAL: Execution Order
-
-**dpt-output MUST wait for dpt-memory to complete!**
-
-dpt-output consumes the memory content, so the correct flow is:
+## 5 Whys (For Bug Fixes)
 
 ```
-WRONG (parallel):
-  dpt-memory (END) + dpt-output  ← DON'T DO THIS
-
-CORRECT (sequential):
-  dpt-memory (END)
-       ↓ (wait for completion)
-  dpt-output
+Problem: [Description]
+Why 1: → Because...
+Why 2: → Because...
+Why 3: → Because...
+Why 4: → Because...
+Why 5: → ROOT CAUSE (fix this!)
 ```
-
-Memory operations are ALWAYS sequential:
-1. dpt-memory START → wait → work begins
-2. work completes → dpt-memory END → wait → dpt-output
 </coding_guidelines>

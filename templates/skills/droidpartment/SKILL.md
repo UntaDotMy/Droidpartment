@@ -1,63 +1,121 @@
 ---
 name: droidpartment
-description: 18 expert agents with memory system. Tracks lessons, mistakes, and learning progress.
+description: 18 expert agents with PDCA learning system. Grows smarter every task.
 ---
 
 # Droidpartment - 18 Experts + Memory
 
-Coordinator-only. Agents do not call each other; the orchestrator sequences them and consumes their outputs.
+## HOW TO CALL AGENTS
 
-## PDCA Task Flow (orchestrator-driven)
+**USE TASK TOOL, NOT SKILL TOOL!**
 
-```
-PLAN:   memory(START) → product → research → arch → scrum → api/data/ux specs
-DO:     dev → ops (pipeline/secrets/health) → perf (baseline)
-CHECK:  qa + lead + sec + review (+ perf re-measure)  # can run in parallel
-ACT:    memory(END) → output
-LOOP:   If any CHECK fails → record mistake → go back to PLAN with new lessons
+```javascript
+Task(subagent_type: "dpt-memory", prompt: "START - [task type] for [project]")
 ```
 
-Rules:
-- memory(END) and output are always sequential.
-- Agents stay independent: each consumes inputs (briefs/specs/memory) and emits findings/evidence; no cross-agent invocation.
+## PDCA Learning Cycle
 
-## The Experts
+Every task follows Plan-Do-Check-Act:
 
-| Expert | Role |
-|--------|------|
-| dpt-memory | Lessons & learning stats |
-| dpt-sec | Security |
-| dpt-lead | Code review |
-| dpt-qa | Testing |
-| dpt-arch | Architecture |
+```
+PLAN  → memory(START), retrieve lessons, define scope
+DO    → Execute with relevant experts
+CHECK → Verify quality (parallel audits OK)
+ACT   → memory(END), capture lessons, output
+```
+
+## Task Flows
+
+### Feature Development
+```
+memory(START) → product → research → arch → scrum
+     → dev → data/api/ux
+     → qa + lead + sec + review (PARALLEL)
+     → docs → memory(END) → output
+```
+
+### Bug Fix
+```
+memory(START) → research (reproduce)
+     → 5 Whys (root cause) → dev → qa (regression test)
+     → qa + lead + sec (PARALLEL)
+     → memory(END) → output
+```
+
+### Audit
+```
+memory(START)
+     → sec + lead + qa + review + perf (ALL PARALLEL)
+     → memory(END) → output
+```
+
+### Research
+```
+memory(START) → research → arch (analyze)
+     → review (simplest?)
+     → memory(END) → output
+```
+
+### Improvement
+```
+memory(START) → perf (BASELINE)
+     → dev (change) → perf (MEASURE)
+     → qa + lead + sec (PARALLEL)
+     → memory(END) → output
+```
+
+## The 18 Experts
+
+| subagent_type | Role |
+|---------------|------|
+| dpt-memory | Learning system (START/END) |
+| dpt-output | Format + stats (LAST) |
+| dpt-product | Requirements |
+| dpt-research | Best practices |
+| dpt-arch | Architecture, ADRs |
+| dpt-scrum | Task breakdown |
 | dpt-dev | Implementation |
-| dpt-review | Simplicity |
 | dpt-data | Database |
 | dpt-api | API design |
 | dpt-ux | UI/UX |
-| dpt-docs | Documentation |
+| dpt-sec | Security (OWASP, CWE) |
+| dpt-lead | Code review (SOLID) |
+| dpt-qa | Testing (pyramid) |
+| dpt-review | Simplicity (YAGNI) |
 | dpt-perf | Performance |
 | dpt-ops | DevOps |
-| dpt-research | Research |
-| dpt-product | Requirements |
-| dpt-scrum | Task breakdown |
+| dpt-docs | Documentation |
 | dpt-grammar | Grammar |
-| dpt-output | Format + stats |
+
+## Parallel vs Sequential
+
+**PARALLEL OK:**
+- sec + lead + qa + review + perf
+
+**MUST BE SEQUENTIAL:**
+- memory(START) → work → memory(END) → output
+- perf(baseline) → change → perf(measure)
 
 ## Memory System
 
 ```
 ~/.factory/memory/
 ├── lessons.yaml     ← What worked
-├── mistakes.yaml    ← What to avoid
-├── patterns.yaml    ← Successful patterns
-├── stats.yaml       ← Learning progress
-└── projects/        ← Per-project memory
+├── mistakes.yaml    ← What to avoid (+prevention)
+├── patterns.yaml    ← Reusable solutions
+└── projects/        ← Per-project knowledge
+```
+
+## Learning Metrics
+
+```
+IMPROVING:       prevented > new_mistakes
+STABLE:          prevented = new_mistakes
+NEEDS_ATTENTION: prevented < new_mistakes
 ```
 
 ## Output Format
 
-End every task with:
 ```
 MEMORY STATUS:
 Project: <name>
@@ -67,19 +125,23 @@ Prevented: <n>
 Learning: Improving/Stable/Needs Attention
 ```
 
-## Example
+## Example: Audit
 
+```javascript
+// 1. Memory START - WAIT
+Task(subagent_type: "dpt-memory", 
+     prompt: "START - audit for MyProject")
+
+// 2. Parallel experts
+Task(subagent_type: "dpt-sec", prompt: "Security audit")
+Task(subagent_type: "dpt-lead", prompt: "Code review")
+Task(subagent_type: "dpt-qa", prompt: "Test coverage")
+
+// 3. Memory END - WAIT (after experts)
+Task(subagent_type: "dpt-memory",
+     prompt: "END - findings: [results]")
+
+// 4. Output - WAIT (after memory)
+Task(subagent_type: "dpt-output",
+     prompt: "Format with memory stats")
 ```
-1. dpt-memory: "START - audit task"
-2. dpt-sec + dpt-lead + dpt-qa (parallel)
-3. dpt-memory: "END - save findings"
-4. dpt-output: "Format with stats"
-```
-
-## Parallel / Sequential Guidance
-- Parallel-safe (CHECK phase): qa, lead, sec, review (+ docs/grammar) once artifacts exist; perf re-measure after build.
-- Must be sequential: memory START → PLAN chain → perf baseline before change → memory END → output.
-
-## Evidence & Memory Discipline
-- Each agent: Before (retrieve relevant lessons/patterns/mistakes), Do (domain checklist, produce evidence), After (1–2 sentence lesson; if issue, include mistake+prevention; add tags).
-- Keep memory entries concise; no logs/traces; shared project/global store.*** End Patch***");

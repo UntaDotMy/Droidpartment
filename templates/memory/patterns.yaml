@@ -2,7 +2,33 @@
 # Patterns that work well across projects
 # Updated by dpt-memory when patterns emerge
 
-patterns: []
+patterns:
+  - id: pattern_20251207_001
+    date: 2025-12-07
+    name: "Pre-Publish Audit Checklist"
+    problem: "Missing critical files or broken functionality discovered after publishing"
+    solution: |
+      Before publishing, verify:
+      1. Security - zero deps or all deps audited
+      2. Code Quality - all modules valid, CLI flags work
+      3. Package Readiness - LICENSE, README, repository URL
+      4. Simplicity - complexity score acceptable
+    when_to_use: "Before npm publish, before git release tags"
+    when_not_to_use: "Development iterations, internal testing"
+    success_count: 1
+    projects: ["Droidpartment"]
+    tags: [publishing, quality, checklist]
+
+  - id: pattern_20251207_002
+    date: 2025-12-07
+    name: "Zero-Dependency Architecture"
+    problem: "Security vulnerabilities from transitive dependencies"
+    solution: "Use only Node.js built-in modules (fs, path, os, readline). Implement needed utilities in-house."
+    when_to_use: "CLI tools, security-critical applications, simple utilities"
+    when_not_to_use: "Complex applications needing proven libraries (e.g., crypto, HTTP frameworks)"
+    success_count: 1
+    projects: ["Droidpartment"]
+    tags: [security, architecture, dependencies]
 
 # Format:
 # - id: pattern_<timestamp>

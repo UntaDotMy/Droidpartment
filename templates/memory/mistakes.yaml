@@ -2,7 +2,17 @@
 # Mistakes made and how to prevent them
 # Updated by dpt-memory at end of each task
 
-mistakes: []
+mistakes:
+  - id: mistake_20251207_001
+    date: 2025-12-07
+    type: audit
+    mistake: "File name inconsistency between code and templates"
+    root_cause: "getProjectMemories() was using old memory file names (episodic.yaml, semantic.yaml) while templates used new names (knowledge.yaml, mistakes.yaml, stats.yaml)"
+    prevention: "When renaming files or changing naming conventions, grep the entire codebase for all references to the old names"
+    detection: "Pre-publish audit comparing code references against actual file templates"
+    project: "Droidpartment"
+    times_prevented: 0
+    tags: [consistency, naming, refactoring]
 
 # Format:
 # - id: mistake_<timestamp>

@@ -2,7 +2,46 @@
 # Lessons that apply to ANY project
 # Updated by dpt-memory at end of each task
 
-lessons: []
+lessons:
+  - id: lesson_20251207_001
+    date: 2025-12-07
+    type: audit
+    lesson: "Keep memory file names consistent between code and templates"
+    context: "When implementing file-based storage systems, ensure all references use the same naming convention"
+    evidence: "Droidpartment pre-publish audit found getProjectMemories() using old names (episodic.yaml, semantic.yaml) instead of correct names (knowledge.yaml, mistakes.yaml, stats.yaml)"
+    project: "Droidpartment"
+    applied_count: 0
+    tags: [consistency, naming, memory, file-system]
+
+  - id: lesson_20251207_002
+    date: 2025-12-07
+    type: audit
+    lesson: "Zero dependencies significantly reduces security vulnerabilities"
+    context: "When designing CLI tools or packages, favor zero-dependency architecture for security"
+    evidence: "Droidpartment security audit: SECURE with zero vulnerabilities due to zero external dependencies"
+    project: "Droidpartment"
+    applied_count: 1
+    tags: [security, dependencies, architecture]
+
+  - id: lesson_20251207_003
+    date: 2025-12-07
+    type: audit
+    lesson: "Always verify CLI flags (--help, --version) before publishing packages"
+    context: "Pre-publish checklist for npm packages or any CLI tools"
+    evidence: "Droidpartment audit verified both flags work correctly"
+    project: "Droidpartment"
+    applied_count: 1
+    tags: [cli, publishing, verification]
+
+  - id: lesson_20251207_004
+    date: 2025-12-07
+    type: audit
+    lesson: "Verify LICENSE file and repository URL match package.json before publishing"
+    context: "Pre-publish checklist for open source packages"
+    evidence: "Droidpartment audit confirmed LICENSE exists and repo URL (UntaDotMy/Droidpartment) is correct"
+    project: "Droidpartment"
+    applied_count: 1
+    tags: [licensing, publishing, verification]
 
 # Format:
 # - id: lesson_<timestamp>
