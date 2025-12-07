@@ -62,7 +62,7 @@
 - ⚡ **Parallel Execution** - Run independent audits simultaneously
 - 📈 **Learning Curve** - Gets smarter with every session
 - 🔄 **PDCA Cycle** - Plan-Do-Check-Act methodology built-in
-- ✅ **Mandatory Workflow** - Main droid MUST delegate to experts
+- ✅ **Strict Enforcement** - Main droid FORBIDDEN from coding directly
 
 ---
 
@@ -86,9 +86,20 @@ npx droidpartment
 
 ---
 
-## ⚠️ Mandatory Workflow
+## ⚠️ Mandatory Workflow (STRICT ENFORCEMENT)
 
-**The main droid MUST use custom droids. It should NOT code directly.**
+**The main droid MUST use custom droids. It is FORBIDDEN from coding directly.**
+
+### v3.0.7: Strict Enforcement Rules
+
+```
+FORBIDDEN ACTIONS:
+❌ NEVER use Edit/Create for code without calling dpt-dev FIRST
+❌ NEVER use TodoWrite without calling dpt-scrum FIRST (3+ steps)
+❌ NEVER start ANY task without dpt-memory START
+❌ NEVER complete ANY task without dpt-memory END
+❌ NEVER respond without dpt-output (multi-step tasks)
+```
 
 ### Task Classification
 
@@ -107,6 +118,14 @@ RULE 2: Classify task → follow REQUIRED flow
 RULE 3: NEVER code directly → use dpt-dev
 RULE 4: NEVER skip steps
 RULE 5: Memory END → then Output (sequential)
+```
+
+### Self-Verification (v3.0.7)
+
+Before every action, main droid must ask:
+```
+"CHECKPOINT: Am I following the droid workflow?"
+"CHECKPOINT: Did dpt-dev provide this code, or am I writing it myself?"
 ```
 
 ---
@@ -307,6 +326,7 @@ Task(subagent_type: "dpt-output", ...)                  // LAST
 - [x] PDCA task flows
 - [x] Parallel execution
 - [x] Mandatory workflow enforcement
+- [x] **v3.0.7: Strict enforcement with FORBIDDEN actions**
 - [ ] Web dashboard for memory visualization
 - [ ] Cross-project pattern sharing
 - [ ] Team memory sync

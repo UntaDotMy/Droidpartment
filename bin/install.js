@@ -10,7 +10,7 @@ const PROJECT_DIR = path.join(process.cwd(), '.factory');
 
 // Get version from package.json
 const PACKAGE_JSON = require(path.join(__dirname, '..', 'package.json'));
-const CURRENT_VERSION = PACKAGE_JSON.version; // 3.0.6
+const CURRENT_VERSION = PACKAGE_JSON.version; // 3.0.7
 
 const DROIDS = [
     'dpt-memory', 'dpt-research', 'dpt-scrum', 'dpt-product', 'dpt-arch', 
