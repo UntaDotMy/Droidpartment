@@ -1,158 +1,200 @@
 <coding_guidelines>
-# Droidpartment - 18 Expert Agents
+# MANDATORY: Droidpartment Workflow
 
-## HOW TO CALL AGENTS
+## STOP! READ THIS FIRST!
 
-**USE TASK TOOL, NOT SKILL TOOL!**
+**You MUST use custom droids for ALL tasks. Do NOT code directly.**
 
-```javascript
+If you are about to write code, STOP and call `dpt-dev` instead.
+If you are about to create tests, STOP and call `dpt-qa` instead.
+If you are about to review code, STOP and call `dpt-lead` instead.
+
+---
+
+## RULE 1: ALWAYS Start With Memory
+
+**BEFORE doing ANY work, you MUST call:**
+
+```
 Task(
   subagent_type: "dpt-memory",
-  description: "Retrieve lessons",
-  prompt: "START - [task type] for [project]"
+  prompt: "START - [task type] for [project name]"
 )
 ```
 
-## PDCA Learning Cycle (Every Task)
+**NO EXCEPTIONS. Even for "simple" tasks.**
 
-```
-PLAN  → dpt-memory START, define scope, retrieve lessons
-DO    → Execute with expert agents
-CHECK → Verify quality, run audits (parallel OK)
-ACT   → dpt-memory END, capture lessons, dpt-output
-```
+---
 
-## Task Flows (Choose Based on Task Type)
+## RULE 2: Classify Task and Follow Flow
 
-### Feature Development
-```
-PLAN:  memory(START) → product → research → arch → scrum
-DO:    dev → data/api/ux (as needed)
-CHECK: qa + lead + sec + review + perf (PARALLEL)
-ACT:   docs → memory(END) → output
-```
+| User Request Contains | Task Type | REQUIRED Flow |
+|----------------------|-----------|---------------|
+| "audit", "review", "check", "analyze" | AUDIT | memory → (sec + lead + qa + perf) → memory → output |
+| "fix", "bug", "error", "broken" | BUG_FIX | memory → dev → qa → memory → output |
+| "add", "create", "implement", "build" | FEATURE | memory → product → arch → scrum → dev → qa → sec → memory → output |
+| "update", "change", "modify" | IMPLEMENTATION | memory → scrum → dev → lead → qa → memory → output |
+| "research", "find", "learn", "understand" | RESEARCH | memory → research → memory → output |
+| "document", "readme", "docs" | DOCUMENTATION | memory → docs → grammar → memory → output |
 
-### Bug Fix
-```
-PLAN:  memory(START) → research (reproduce)
-DO:    5 Whys → dev (fix root cause) → qa (regression test)
-CHECK: qa + lead + sec (PARALLEL)
-ACT:   memory(END) → output (include prevention)
-```
+---
 
-### Research / Understanding
-```
-PLAN:  memory(START) → define questions
-DO:    research → arch (analyze)
-CHECK: review (simplest approach?)
-ACT:   memory(END) → output (with sources)
+## RULE 3: NEVER Code Directly
+
+❌ **WRONG - Do NOT do this:**
+```javascript
+// Main droid writing code directly
+const cleanup = onValue(ref, callback);
+useEffect(() => cleanup, []);
 ```
 
-### Audit / Review
+✅ **CORRECT - Call dpt-dev instead:**
 ```
-PLAN:  memory(START)
-DO:    sec + lead + qa + review + perf (ALL PARALLEL)
-CHECK: consolidate + prioritize
-ACT:   memory(END) → output (action items)
+Task(
+  subagent_type: "dpt-dev",
+  prompt: "Implement [specific requirement]. File: [path]. Follow existing patterns."
+)
 ```
 
-### Improvement / Refactoring
+---
+
+## RULE 4: NEVER Skip These Steps
+
+| Step | When | Call |
+|------|------|------|
+| Memory START | FIRST thing, always | `dpt-memory: "START..."` |
+| Task Breakdown | 3+ steps | `dpt-scrum: "Break down..."` |
+| Implementation | Any coding | `dpt-dev: "Implement..."` |
+| Code Review | After coding | `dpt-lead: "Review..."` |
+| Testing | After implementation | `dpt-qa: "Test..."` |
+| Security | New features | `dpt-sec: "Audit..."` |
+| Memory END | LAST thing, always | `dpt-memory: "END..."` |
+| Output | Before responding | `dpt-output: "Format..."` |
+
+---
+
+## RULE 5: Parallel vs Sequential
+
+**CAN run parallel (independent):**
 ```
-PLAN:  memory(START) → perf (MEASURE BASELINE)
-DO:    dev (small changes) → perf (MEASURE AFTER)
-CHECK: qa + lead + sec + review (PARALLEL)
-ACT:   memory(END) → output (before/after metrics)
+Task(dpt-sec, ...) 
+Task(dpt-lead, ...)  ← Same time OK
+Task(dpt-qa, ...)
 ```
+
+**MUST run sequential (wait for each):**
+```
+Task(dpt-memory, "START...") → WAIT
+Task(dpt-scrum, ...) → WAIT
+Task(dpt-dev, ...) → WAIT
+Task(dpt-memory, "END...") → WAIT
+Task(dpt-output, ...) → LAST
+```
+
+---
+
+## RULE 6: Memory END Must Include Results
+
+When calling dpt-memory END, include what happened:
+
+```
+Task(
+  subagent_type: "dpt-memory",
+  prompt: "END - [task type] completed.
+    LESSONS: [what worked]
+    MISTAKES: [what went wrong]
+    FIXED: [what was changed]"
+)
+```
+
+---
+
+## RULE 7: Output is ALWAYS Last
+
+**dpt-output MUST be called AFTER dpt-memory END completes.**
+
+```
+Task(dpt-memory, "END...") → WAIT for completion
+Task(dpt-output, "Format results...") → THEN call this
+```
+
+---
 
 ## The 18 Experts
 
-| Agent | Role | When to Use |
-|-------|------|-------------|
-| dpt-memory | Learning system | ALWAYS first and last |
-| dpt-output | Format + stats | ALWAYS last (after memory) |
-| dpt-product | Requirements | Feature planning |
-| dpt-research | Best practices | Any research needed |
-| dpt-arch | Architecture, ADRs | Design decisions |
-| dpt-scrum | Task breakdown | Complex tasks |
-| dpt-dev | Implementation | Coding |
-| dpt-data | Database | Schema, queries |
-| dpt-api | API design | Endpoints |
-| dpt-ux | UI/UX | Interface design |
-| dpt-sec | Security | Audits, vulnerability checks |
-| dpt-lead | Code review | Quality checks |
-| dpt-qa | Testing | Test coverage |
-| dpt-review | Simplicity | Complexity checks |
-| dpt-perf | Performance | Optimization (measure!) |
-| dpt-ops | DevOps | CI/CD, deployment |
-| dpt-docs | Documentation | Docs, README |
-| dpt-grammar | Grammar | Text clarity |
+| subagent_type | Use For |
+|---------------|---------|
+| `dpt-memory` | START and END of every task |
+| `dpt-output` | Format final results (LAST) |
+| `dpt-product` | Requirements, user stories |
+| `dpt-research` | Find best practices |
+| `dpt-arch` | Design, architecture decisions |
+| `dpt-scrum` | Break down tasks |
+| `dpt-dev` | **ALL code implementation** |
+| `dpt-data` | Database work |
+| `dpt-api` | API design |
+| `dpt-ux` | UI/UX design |
+| `dpt-sec` | Security audits |
+| `dpt-lead` | Code review |
+| `dpt-qa` | Testing |
+| `dpt-review` | Simplicity check |
+| `dpt-perf` | Performance |
+| `dpt-ops` | DevOps, CI/CD |
+| `dpt-docs` | Documentation |
+| `dpt-grammar` | Text clarity |
 
-## Parallel vs Sequential
+---
 
-**CAN be parallel (independent):**
+## Example: User Says "Fix the bug in auth"
+
+**Step 1: Classify** → BUG_FIX
+
+**Step 2: Execute Flow**
 ```
-dpt-sec + dpt-lead + dpt-qa + dpt-review + dpt-perf
-```
-
-**MUST be sequential:**
-```
-dpt-memory(START) → [work] → dpt-memory(END) → dpt-output
-dpt-perf(baseline) → [change] → dpt-perf(measure)
-```
-
-## Memory Capture
-
-### At Task End, Capture:
-
-**Lessons** (what worked):
-```yaml
-lesson: "<what learned>"
-context: "<when to apply>"
-evidence: "<proof it works>"
+1. Task(dpt-memory, "START - bug fix for auth")     ← WAIT
+2. Task(dpt-dev, "Fix bug in auth: [details]")      ← WAIT  
+3. Task(dpt-qa, "Test the auth fix")                ← WAIT
+4. Task(dpt-memory, "END - auth bug fixed")         ← WAIT
+5. Task(dpt-output, "Format bug fix results")       ← LAST
 ```
 
-**Mistakes** (what to avoid):
-```yaml
-mistake: "<what went wrong>"
-root_cause: "<5 Whys result>"
-prevention: "<how to avoid>"
+---
+
+## Example: User Says "Add new feature X"
+
+**Step 1: Classify** → FEATURE
+
+**Step 2: Execute Flow**
+```
+1. Task(dpt-memory, "START - new feature X")        ← WAIT
+2. Task(dpt-product, "Define requirements for X")   ← WAIT
+3. Task(dpt-arch, "Design architecture for X")      ← WAIT
+4. Task(dpt-scrum, "Break down feature X tasks")    ← WAIT
+5. Task(dpt-dev, "Implement feature X")             ← WAIT
+6. Task(dpt-qa, "Test feature X")                   ← Can parallel
+7. Task(dpt-sec, "Security check for X")            ← with qa
+8. Task(dpt-memory, "END - feature X complete")     ← WAIT
+9. Task(dpt-output, "Format feature results")       ← LAST
 ```
 
-**Patterns** (reusable solutions):
-```yaml
-pattern: "<name>"
-problem: "<what it solves>"
-solution: "<how to apply>"
-```
+---
 
-## Learning Metrics
+## Checkpoint: Before Responding to User
 
-```
-IMPROVING:    Prevented > New mistakes
-STABLE:       Prevented = New mistakes  
-NEEDS_ATTENTION: Prevented < New mistakes
-```
+Ask yourself:
+- [ ] Did I call dpt-memory START first?
+- [ ] Did I use dpt-dev for code (not code directly)?
+- [ ] Did I call dpt-memory END with results?
+- [ ] Did I call dpt-output last?
 
-## Output Format
+**If any answer is NO, you skipped the workflow. Go back and fix it.**
 
-Every task ends with:
-```
-MEMORY STATUS:
-Project: <name>
-Lessons: <n> (+<new>)
-Mistakes: <n> (+<new>)
-Prevented: <n>
-Learning: Improving/Stable/Needs Attention
-```
+---
 
-## 5 Whys (For Bug Fixes)
+## Remember
 
-```
-Problem: [Description]
-Why 1: → Because...
-Why 2: → Because...
-Why 3: → Because...
-Why 4: → Because...
-Why 5: → ROOT CAUSE (fix this!)
-```
+1. **Memory FIRST** - Always start with dpt-memory
+2. **Never code directly** - Use dpt-dev
+3. **Memory LAST** - Always end with dpt-memory then dpt-output
+4. **Capture lessons** - Include what worked and what didn't
 </coding_guidelines>
