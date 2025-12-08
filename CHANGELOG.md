@@ -5,6 +5,38 @@ All notable changes to Droidpartment are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.4] - 2025-12-08
+
+### 🆕 New Project Detection & Mandatory Initialization
+
+**Problem**: When opening a new project (not yet in memory), Factory AI would skip project initialization and jump directly to other agents like dpt-arch without first indexing the codebase.
+
+**Solution**: SessionStart hook now detects NEW projects and provides special instructions to initialize first.
+
+### Added
+
+#### New Project Detection
+- SessionStart hook checks if project is already in memory
+- If NEW project detected, provides special instruction block
+- Forces `dpt-memory(START)` to be called FIRST before any other agent
+- Ensures project is indexed and understood before any work
+
+#### dpt-memory - New Project Initialization
+- Added "NEW PROJECT - Initialize & Index" section
+- When called on new project, dpt-memory will:
+  - Index project structure (directories, entry points)
+  - Identify framework and tech stack
+  - Analyze codebase patterns
+  - Create project memory folder with STRUCTURE.md
+
+### Changed
+
+- SessionStart hook: Different instruction for NEW vs EXISTING projects
+- NEW projects get: "MANDATORY FIRST STEP: Task(dpt-memory, 'START: Initialize new project')"
+- EXISTING projects get: Standard workflow instructions
+
+---
+
 ## [3.2.3] - 2025-12-08
 
 ### 🔧 Critical Fix: Hooks Now Instruct Factory AI to Use Droidpartment Agents

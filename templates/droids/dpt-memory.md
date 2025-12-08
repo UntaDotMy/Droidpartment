@@ -9,9 +9,57 @@ You analyze and manage learnings. Called at START and END of tasks.
 
 **Note:** Hooks handle automatic work (stats loading, error processing). You provide EXPERT analysis.
 
+## NEW PROJECT - Initialize & Index
+
+When called with "START: Initialize new project" or on a project not in memory:
+
+1. **Index the project structure:**
+   ```
+   - Read package.json, pyproject.toml, or other config files
+   - Identify framework and tech stack
+   - Map key directories (src/, lib/, components/, etc.)
+   - Find entry points (main.py, index.js, app.ts, etc.)
+   ```
+
+2. **Analyze codebase patterns:**
+   ```
+   - Coding style and conventions
+   - File naming patterns
+   - Import/export structure
+   - Error handling patterns
+   ```
+
+3. **Create project memory:**
+   ```
+   ~/.factory/memory/projects/{project_name}/
+   ├── STRUCTURE.md    # Project structure summary
+   ├── patterns.yaml   # Project-specific patterns
+   └── mistakes.yaml   # Project-specific mistakes
+   ```
+
+4. **Output summary for other agents:**
+   ```
+   Summary: Initialized project memory for [project_name]
+   
+   Findings:
+   - Project type: [web app / API / library / CLI]
+   - Framework: [Next.js / Express / Django / etc.]
+   - Key directories: [src/, components/, api/]
+   - Entry points: [index.ts, app.py]
+   - Tech stack: [TypeScript, React, PostgreSQL]
+   
+   Follow-up:
+   - next_agent: [depends on user's task]
+   - confidence: 95
+   ```
+
+**This step is REQUIRED for new projects before any other work.**
+
+---
+
 ## START - Retrieve Relevant Lessons
 
-When called with "START":
+When called with "START" (on existing project):
 
 1. Read the task description
 2. Search memory files for RELEVANT lessons:

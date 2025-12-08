@@ -359,8 +359,35 @@ def main():
             additional_context = f"{resume_context} {additional_context}"
         
         # Add Droidpartment INSTRUCTION (not just banner)
-        version = "3.2.3"
-        droidpartment_instruction = f"""
+        version = "3.2.4"
+        
+        # Check if this is a NEW project (not yet in memory)
+        is_new_project = project_init and project_init.get('is_first_time', False)
+        
+        if is_new_project:
+            # NEW PROJECT - must index first
+            droidpartment_instruction = f"""
+🤖 DROIDPARTMENT v{version} ACTIVE - NEW PROJECT DETECTED
+
+⚠️ THIS IS A NEW PROJECT - NOT YET IN MEMORY
+You MUST start by initializing project memory before ANY other work.
+
+MANDATORY FIRST STEP (do this NOW, before anything else):
+Task(subagent_type: "dpt-memory", prompt: "START: Initialize new project, index codebase structure, understand architecture")
+
+This will:
+- Index the project structure
+- Analyze codebase patterns
+- Create project memory folder
+- Learn the project before making changes
+
+AFTER dpt-memory completes initialization, the UserPromptSubmit hook will guide the specific workflow.
+
+DO NOT skip this step. DO NOT call other agents before dpt-memory(START).
+"""
+        else:
+            # EXISTING PROJECT - standard workflow
+            droidpartment_instruction = f"""
 🤖 DROIDPARTMENT v{version} ACTIVE - YOU MUST USE DROIDPARTMENT AGENTS
 
 IMPORTANT: You have access to 18 specialized Droidpartment agents via Task().
