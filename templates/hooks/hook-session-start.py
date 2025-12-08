@@ -359,7 +359,7 @@ def main():
             additional_context = f"{resume_context} {additional_context}"
         
         # Add Droidpartment INSTRUCTION (not just banner)
-        version = "3.2.5"
+        version = "3.2.6"
         
         # Check if this is a NEW project (not yet in memory)
         is_new_project = project_init and project_init.get('is_first_time', False)
@@ -386,24 +386,49 @@ AFTER dpt-memory completes initialization, the UserPromptSubmit hook will guide 
 DO NOT skip this step. DO NOT call other agents before dpt-memory(START).
 """
         else:
-            # EXISTING PROJECT - standard workflow
+            # EXISTING PROJECT - MANDATORY workflow
             droidpartment_instruction = f"""
-🤖 DROIDPARTMENT v{version} ACTIVE - YOU MUST USE DROIDPARTMENT AGENTS
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  🤖 DROIDPARTMENT v{version} ACTIVE - MANDATORY AGENT USAGE                    ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║                                                                              ║
+║  ⛔ FORBIDDEN ACTIONS:                                                       ║
+║     • Writing code directly (use dpt-dev instead)                           ║
+║     • Analyzing files directly (use dpt-arch or dpt-research)               ║
+║     • Reviewing code directly (use dpt-lead or dpt-review)                  ║
+║     • Testing directly (use dpt-qa)                                         ║
+║     • ANY task without calling Task() first                                  ║
+║                                                                              ║
+║  ✅ REQUIRED ACTIONS:                                                        ║
+║     • ALWAYS start with: Task(subagent_type: "dpt-memory", prompt: "START") ║
+║     • ALWAYS delegate to appropriate dpt-* agent via Task()                 ║
+║     • ALWAYS end with: Task(subagent_type: "dpt-memory", prompt: "END")     ║
+║     • ALWAYS finish with: Task(subagent_type: "dpt-output", prompt: "...")  ║
+║                                                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
 
-IMPORTANT: You have access to 18 specialized Droidpartment agents via Task().
-DO NOT implement tasks directly. ALWAYS delegate to the appropriate dpt-* agent.
+AVAILABLE AGENTS (call via Task tool):
+• dpt-memory   - Learning (ALWAYS first and last)
+• dpt-output   - Report synthesis (ALWAYS final)
+• dpt-dev      - Code implementation
+• dpt-qa       - Testing
+• dpt-sec      - Security audit
+• dpt-arch     - Architecture
+• dpt-product  - Requirements/PRD
+• dpt-scrum    - Task breakdown
+• dpt-research - Best practices
+• dpt-lead     - Code review
+• dpt-review   - Simplicity check
+• dpt-perf     - Performance
+• dpt-data     - Database
+• dpt-api      - API design
+• dpt-ux       - UI/UX
+• dpt-ops      - DevOps
+• dpt-docs     - Documentation
+• dpt-grammar  - Writing quality
 
-Available agents: dpt-memory, dpt-dev, dpt-qa, dpt-sec, dpt-arch, dpt-product, 
-dpt-scrum, dpt-research, dpt-lead, dpt-review, dpt-ops, dpt-data, dpt-api, 
-dpt-ux, dpt-docs, dpt-grammar, dpt-perf, dpt-output
-
-MANDATORY WORKFLOW:
-1. ALWAYS start with: Task(subagent_type: "dpt-memory", prompt: "START: [task]")
-2. Delegate work to appropriate agent (dpt-dev for code, dpt-qa for tests, etc.)
-3. ALWAYS end with: Task(subagent_type: "dpt-memory", prompt: "END: [lessons]")
-4. ALWAYS finish with: Task(subagent_type: "dpt-output", prompt: "summarize")
-
-The UserPromptSubmit hook will provide specific workflow steps based on task complexity.
+Your job is ONLY to orchestrate Task() calls. The agents do the actual work.
+The UserPromptSubmit hook will provide specific Task() calls for this request.
 """
         
         if additional_context:

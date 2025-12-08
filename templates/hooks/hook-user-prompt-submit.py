@@ -144,12 +144,45 @@ def get_project_context() -> str:
     return ""
 
 
-def detect_task_complexity(prompt: str) -> str:
+def detect_task_type(prompt: str) -> dict:
     """
-    Detect task complexity from prompt to auto-adjust workflow depth.
-    Returns: 'simple', 'medium', or 'complex'
+    Detect task complexity AND type to determine which agents to use.
+    Returns: {complexity: str, agents: list, domain: str}
     """
     prompt_lower = prompt.lower()
+    
+    # Base agents (always used)
+    agents = ['dpt-memory', 'dpt-output']
+    domain = 'general'
+    
+    # Domain detection - which specialized agents to include
+    domain_agents = {
+        'database': ['dpt-data'],
+        'api': ['dpt-api'],
+        'ui': ['dpt-ux'],
+        'devops': ['dpt-ops'],
+        'docs': ['dpt-docs', 'dpt-grammar'],
+        'performance': ['dpt-perf'],
+        'security': ['dpt-sec'],
+    }
+    
+    # Domain keywords
+    domain_keywords = {
+        'database': ['database', 'db', 'sql', 'query', 'schema', 'migration', 'table', 'model', 'orm', 'postgres', 'mysql', 'mongodb', 'prisma'],
+        'api': ['api', 'endpoint', 'rest', 'graphql', 'route', 'controller', 'http', 'request', 'response'],
+        'ui': ['ui', 'ux', 'frontend', 'component', 'page', 'form', 'button', 'layout', 'css', 'style', 'react', 'vue', 'interface', 'design'],
+        'devops': ['deploy', 'ci', 'cd', 'docker', 'kubernetes', 'pipeline', 'aws', 'azure', 'server', 'nginx', 'hosting'],
+        'docs': ['document', 'readme', 'guide', 'tutorial', 'comment', 'jsdoc', 'explain', 'write doc'],
+        'performance': ['performance', 'optimize', 'speed', 'slow', 'cache', 'memory', 'benchmark', 'profil'],
+        'security': ['security', 'auth', 'login', 'password', 'token', 'jwt', 'oauth', 'encrypt', 'vulnerab', 'owasp'],
+    }
+    
+    # Detect domains
+    detected_domains = []
+    for domain_name, keywords in domain_keywords.items():
+        if any(kw in prompt_lower for kw in keywords):
+            detected_domains.append(domain_name)
+            agents.extend(domain_agents.get(domain_name, []))
     
     # Complex task indicators
     complex_indicators = [
@@ -160,112 +193,189 @@ def detect_task_complexity(prompt: str) -> str:
         'database and api', 'full implementation'
     ]
     
-    # Multi-domain indicators (needs architecture)
-    multi_domain = [
-        ('api', 'ui'), ('frontend', 'backend'), ('database', 'service'),
-        ('auth', 'api'), ('component', 'service'), ('model', 'controller')
-    ]
-    
     # Simple task indicators
     simple_indicators = [
         'fix typo', 'rename', 'update comment', 'change text',
-        'small fix', 'quick change', 'minor', 'simple'
+        'small fix', 'quick change', 'minor', 'simple', 'tweak'
     ]
     
-    # Check for simple tasks first
-    for indicator in simple_indicators:
-        if indicator in prompt_lower:
-            return 'simple'
+    # Analysis/review task indicators
+    analysis_indicators = [
+        'analyze', 'understand', 'review', 'audit', 'check', 'examine',
+        'look at', 'explain', 'what is', 'how does', 'codebase', 'structure'
+    ]
     
-    # Check for complex indicators
-    complex_score = 0
-    for indicator in complex_indicators:
-        if indicator in prompt_lower:
-            complex_score += 2
+    # Determine complexity
+    complexity = 'medium'
     
-    # Check for multi-domain
-    for d1, d2 in multi_domain:
-        if d1 in prompt_lower and d2 in prompt_lower:
-            complex_score += 3
+    # Check for simple tasks
+    if any(ind in prompt_lower for ind in simple_indicators):
+        complexity = 'simple'
+        agents.extend(['dpt-dev', 'dpt-qa'])
     
-    # Word count as complexity indicator
-    word_count = len(prompt.split())
-    if word_count > 50:
-        complex_score += 1
-    if word_count > 100:
-        complex_score += 2
+    # Check for analysis tasks
+    elif any(ind in prompt_lower for ind in analysis_indicators):
+        complexity = 'medium'
+        agents.extend(['dpt-research', 'dpt-arch', 'dpt-lead'])
+        if 'security' in prompt_lower or 'audit' in prompt_lower:
+            agents.append('dpt-sec')
+        if 'performance' in prompt_lower:
+            agents.append('dpt-perf')
     
-    if complex_score >= 4:
-        return 'complex'
-    elif complex_score >= 1:
-        return 'medium'
+    # Check for complex tasks
+    elif any(ind in prompt_lower for ind in complex_indicators) or len(detected_domains) >= 2:
+        complexity = 'complex'
+        agents.extend(['dpt-research', 'dpt-product', 'dpt-arch', 'dpt-scrum', 'dpt-dev', 'dpt-qa', 'dpt-sec', 'dpt-lead'])
+    
+    # Default medium
     else:
-        return 'simple'
-
-
-def get_workflow_recommendation(complexity: str, prompt: str) -> str:
-    """Get IMPERATIVE workflow instruction based on complexity.
+        agents.extend(['dpt-scrum', 'dpt-dev', 'dpt-qa'])
     
-    Factory AI needs explicit Task() calls, not just recommendations.
-    This output goes into additionalContext which the main agent sees.
+    # Always add review for non-simple tasks
+    if complexity != 'simple' and 'dpt-review' not in agents:
+        agents.append('dpt-review')
+    
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_agents = []
+    for agent in agents:
+        if agent not in seen:
+            seen.add(agent)
+            unique_agents.append(agent)
+    
+    return {
+        'complexity': complexity,
+        'agents': unique_agents,
+        'domains': detected_domains
+    }
+
+
+def get_workflow_recommendation(task_info: dict, prompt: str) -> str:
+    """Get MANDATORY workflow instruction based on detected task type and agents.
+    
+    This is NOT optional. Factory AI MUST follow these instructions.
+    The output goes into additionalContext which the main agent sees.
     """
+    complexity = task_info['complexity']
+    agents = task_info['agents']
+    domains = task_info.get('domains', [])
+    
     task_summary = prompt[:100] + "..." if len(prompt) > 100 else prompt
     
-    if complexity == 'simple':
-        return f"""⚡ DROIDPARTMENT WORKFLOW (Simple Task):
-YOU MUST USE THESE EXACT TASK CALLS IN ORDER:
+    # Build domain string
+    domain_str = f" (Domains: {', '.join(domains)})" if domains else ""
+    
+    mandatory_header = f"""
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  🚨 MANDATORY: YOU MUST USE DROIDPARTMENT AGENTS FOR THIS TASK              ║
+║                                                                              ║
+║  DO NOT write code yourself. DO NOT analyze files yourself.                  ║
+║  DO NOT skip Task() calls. DELEGATE EVERYTHING to dpt-* agents.              ║
+║                                                                              ║
+║  Your ONLY job is to call Task() with the appropriate agent.                 ║
+║  The agents will do the actual work.                                         ║
+╚══════════════════════════════════════════════════════════════════════════════╝
 
-1. Task(subagent_type: "dpt-memory", prompt: "START: {task_summary}")
-2. Task(subagent_type: "dpt-dev", prompt: "[implement the task]")
-3. Task(subagent_type: "dpt-qa", prompt: "[verify implementation]")
-4. Task(subagent_type: "dpt-memory", prompt: "END: [lessons learned]")
-5. Task(subagent_type: "dpt-output", prompt: "summarize results")
+DETECTED: {complexity.upper()} task{domain_str}
+AGENTS TO USE: {', '.join(agents)}
+"""
+    
+    # Build dynamic workflow based on detected agents
+    steps = []
+    step_num = 1
+    
+    # Always start with dpt-memory
+    steps.append(f'Step {step_num}: Task(subagent_type: "dpt-memory", prompt: "START: {task_summary}")')
+    step_num += 1
+    
+    # Add research if detected
+    if 'dpt-research' in agents:
+        steps.append(f'Step {step_num}: Task(subagent_type: "dpt-research", prompt: "research best practices")')
+        step_num += 1
+    
+    # Add planning agents
+    if 'dpt-product' in agents:
+        steps.append(f'Step {step_num}: Task(subagent_type: "dpt-product", prompt: "create PRD.md")')
+        step_num += 1
+    
+    if 'dpt-arch' in agents:
+        steps.append(f'Step {step_num}: Task(subagent_type: "dpt-arch", prompt: "analyze/design architecture")')
+        step_num += 1
+    
+    if 'dpt-scrum' in agents:
+        steps.append(f'Step {step_num}: Task(subagent_type: "dpt-scrum", prompt: "break down into tasks")')
+        step_num += 1
+    
+    # Add domain-specific agents
+    if 'dpt-data' in agents:
+        steps.append(f'Step {step_num}: Task(subagent_type: "dpt-data", prompt: "database design/queries")')
+        step_num += 1
+    
+    if 'dpt-api' in agents:
+        steps.append(f'Step {step_num}: Task(subagent_type: "dpt-api", prompt: "API design/endpoints")')
+        step_num += 1
+    
+    if 'dpt-ux' in agents:
+        steps.append(f'Step {step_num}: Task(subagent_type: "dpt-ux", prompt: "UI/UX design")')
+        step_num += 1
+    
+    # Implementation
+    if 'dpt-dev' in agents:
+        steps.append(f'Step {step_num}: Task(subagent_type: "dpt-dev", prompt: "[implement the work]")')
+        step_num += 1
+    
+    # Quality/audit agents
+    if 'dpt-qa' in agents:
+        steps.append(f'Step {step_num}: Task(subagent_type: "dpt-qa", prompt: "test/verify implementation")')
+        step_num += 1
+    
+    if 'dpt-sec' in agents:
+        steps.append(f'Step {step_num}: Task(subagent_type: "dpt-sec", prompt: "security audit")')
+        step_num += 1
+    
+    if 'dpt-perf' in agents:
+        steps.append(f'Step {step_num}: Task(subagent_type: "dpt-perf", prompt: "performance analysis")')
+        step_num += 1
+    
+    if 'dpt-lead' in agents:
+        steps.append(f'Step {step_num}: Task(subagent_type: "dpt-lead", prompt: "code review")')
+        step_num += 1
+    
+    if 'dpt-review' in agents:
+        steps.append(f'Step {step_num}: Task(subagent_type: "dpt-review", prompt: "simplicity check")')
+        step_num += 1
+    
+    # DevOps
+    if 'dpt-ops' in agents:
+        steps.append(f'Step {step_num}: Task(subagent_type: "dpt-ops", prompt: "deployment/CI setup")')
+        step_num += 1
+    
+    # Documentation
+    if 'dpt-docs' in agents:
+        steps.append(f'Step {step_num}: Task(subagent_type: "dpt-docs", prompt: "write documentation")')
+        step_num += 1
+    
+    if 'dpt-grammar' in agents:
+        steps.append(f'Step {step_num}: Task(subagent_type: "dpt-grammar", prompt: "improve writing quality")')
+        step_num += 1
+    
+    # Always end with dpt-memory and dpt-output
+    steps.append(f'Step {step_num}: Task(subagent_type: "dpt-memory", prompt: "END: capture lessons learned")')
+    step_num += 1
+    steps.append(f'Step {step_num}: Task(subagent_type: "dpt-output", prompt: "synthesize final report")')
+    
+    # Determine emoji based on complexity
+    emoji = {'simple': '🟢', 'medium': '🟡', 'complex': '🔴'}.get(complexity, '🟡')
+    
+    workflow = f"""
+{emoji} {complexity.upper()} TASK - Execute these {len(steps)} Task() calls:
 
-DO NOT skip these steps. DO NOT implement directly without calling dpt-dev."""
+{chr(10).join(steps)}
 
-    elif complexity == 'complex':
-        return f"""🚀 DROIDPARTMENT WORKFLOW (Complex Task - Full Spec Required):
-YOU MUST USE THESE EXACT TASK CALLS IN ORDER:
-
-Wave 1 - Initialize:
-1. Task(subagent_type: "dpt-memory", prompt: "START: {task_summary}")
-2. Task(subagent_type: "dpt-research", prompt: "research best practices for this task")
-
-Wave 2 - Specification:
-3. Task(subagent_type: "dpt-product", prompt: "create PRD.md with requirements")
-
-Wave 3 - Architecture:
-4. Task(subagent_type: "dpt-arch", prompt: "create ARCHITECTURE.md based on PRD")
-
-Wave 4 - Task Breakdown:
-5. Task(subagent_type: "dpt-scrum", prompt: "break down into stories with [P]/[S] markers")
-
-Wave 5 - Implementation:
-6. Task(subagent_type: "dpt-dev", prompt: "[implement each component]")
-
-Wave 6 - Quality (run these in parallel):
-7. Task(subagent_type: "dpt-qa", prompt: "test implementation")
-8. Task(subagent_type: "dpt-sec", prompt: "security audit")
-9. Task(subagent_type: "dpt-lead", prompt: "code review")
-
-Wave 7 - Finalize:
-10. Task(subagent_type: "dpt-memory", prompt: "END: capture all lessons learned")
-11. Task(subagent_type: "dpt-output", prompt: "synthesize final report")
-
-⚠️ DO NOT skip waves. DO NOT implement directly. Follow this workflow."""
-
-    else:  # medium
-        return f"""📋 DROIDPARTMENT WORKFLOW (Medium Task):
-YOU MUST USE THESE EXACT TASK CALLS IN ORDER:
-
-1. Task(subagent_type: "dpt-memory", prompt: "START: {task_summary}")
-2. Task(subagent_type: "dpt-scrum", prompt: "break down task into steps")
-3. Task(subagent_type: "dpt-dev", prompt: "[implement based on breakdown]")
-4. Task(subagent_type: "dpt-qa", prompt: "verify implementation")
-5. Task(subagent_type: "dpt-memory", prompt: "END: lessons learned")
-6. Task(subagent_type: "dpt-output", prompt: "summarize results")
-
-DO NOT skip these steps. Call each agent in sequence."""
+⛔ FORBIDDEN: Writing code yourself, skipping agents, analyzing files directly.
+✅ REQUIRED: Call Task() for EVERY step. Start with Step 1 NOW."""
+    
+    return mandatory_header + workflow
 
 
 def should_auto_spec(prompt: str, complexity: str) -> bool:
@@ -289,13 +399,13 @@ def build_context_injection(prompt: str) -> str:
     """Build context string to inject."""
     parts = []
     
-    # Scale-Adaptive: Detect task complexity and INSTRUCT workflow
-    complexity = detect_task_complexity(prompt)
-    workflow_instruction = get_workflow_recommendation(complexity, prompt)
+    # Smart Task Detection: Detect complexity AND which agents to use
+    task_info = detect_task_type(prompt)
+    workflow_instruction = get_workflow_recommendation(task_info, prompt)
     parts.append(workflow_instruction)
     
     # Auto-Spec: If complex task needs spec first
-    if should_auto_spec(prompt, complexity):
+    if should_auto_spec(prompt, task_info['complexity']):
         parts.append("[AUTO-SPEC: This task requires specification first. Call dpt-product before implementation.]")
     
     # Get relevant lessons

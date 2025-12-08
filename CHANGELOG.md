@@ -5,6 +5,44 @@ All notable changes to Droidpartment are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.6] - 2025-12-08
+
+### 🚨 MANDATORY Agent Usage - No More "Suggestions"
+
+**Problem**: Factory AI was ignoring Droidpartment instructions and doing tasks itself instead of calling dpt-* agents. The hooks were "suggesting" workflows but Factory AI had autonomy to ignore them.
+
+**Solution**: Changed hooks from "suggestions" to **MANDATORY instructions** with explicit FORBIDDEN/REQUIRED markers.
+
+### Changed
+
+#### SessionStart Hook - Now MANDATORY
+- Added ASCII box with clear FORBIDDEN and REQUIRED sections
+- Listed all forbidden actions: writing code, analyzing files, reviewing, testing directly
+- Listed all required actions: Task() calls for everything
+- Clear list of all 18 available agents
+
+#### UserPromptSubmit Hook - Now MANDATORY
+- Added mandatory header box: "YOUR ONLY JOB IS TO CALL TASK()"
+- Added ⛔ FORBIDDEN markers for direct implementation
+- Added ✅ REQUIRED markers for Task() calls
+- Added "Start with Step 1 NOW" at end of each workflow
+- Made complexity detection trigger immediate action
+
+### Impact
+
+Before:
+```
+"You should use dpt-memory..." → Factory AI: "I'll just do it myself"
+```
+
+After:
+```
+"⛔ FORBIDDEN: Writing code yourself" → Factory AI: Must call Task()
+"✅ REQUIRED: Call Task() NOW" → Factory AI: Calls dpt-memory first
+```
+
+---
+
 ## [3.2.5] - 2025-12-08
 
 ### 📦 Simplified to ONE Skill: `droidpartment`
