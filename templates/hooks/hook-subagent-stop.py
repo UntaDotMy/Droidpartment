@@ -170,12 +170,19 @@ def update_session_state(agent):
             with open(session_file, 'r') as f:
                 state = json.load(f)
         else:
-            state = {'agents_run': [], 'droid_stats': {}}
+            state = {'agents_run': [], 'droid_stats': {}, 'workflow_tracking': {}}
         
         if 'agents_run' not in state:
             state['agents_run'] = []
         if 'droid_stats' not in state:
             state['droid_stats'] = {}
+        if 'workflow_tracking' not in state:
+            state['workflow_tracking'] = {
+                'memory_start_called': False,
+                'memory_end_called': False,
+                'output_called': False,
+                'lessons_captured': False
+            }
         
         state['agents_run'].append({
             'agent': agent or 'unknown',
@@ -186,6 +193,18 @@ def update_session_state(agent):
             if agent not in state['droid_stats']:
                 state['droid_stats'][agent] = 0
             state['droid_stats'][agent] += 1
+            
+            # Track critical workflow steps
+            if agent == 'dpt-memory':
+                # Check if this is START or END by looking at recent agents
+                agents_list = [a.get('agent') for a in state['agents_run']]
+                if len(agents_list) <= 2:  # Early in workflow
+                    state['workflow_tracking']['memory_start_called'] = True
+                else:
+                    state['workflow_tracking']['memory_end_called'] = True
+                    state['workflow_tracking']['lessons_captured'] = True
+            elif agent == 'dpt-output':
+                state['workflow_tracking']['output_called'] = True
         
         with open(session_file, 'w') as f:
             json.dump(state, f, indent=2)
@@ -263,6 +282,111 @@ def refresh_project_index_if_needed():
     except:
         pass
 
+
+def check_workflow_completion(agent):
+    """
+    LEARNING SYSTEM: Check if workflow is complete and lessons were captured.
+    This is the "verification layer" that detects skipped steps.
+    
+    Returns: (is_complete, warning_message)
+    """
+    try:
+        session_file = memory_dir / 'session_state.json'
+        if not session_file.exists():
+            return True, None
+        
+        with open(session_file, 'r') as f:
+            state = json.load(f)
+        
+        tracking = state.get('workflow_tracking', {})
+        
+        # If dpt-output just ran, verify dpt-memory END was called
+        if agent == 'dpt-output':
+            if not tracking.get('memory_end_called', False):
+                # PENALTY: Record this as a workflow mistake
+                record_workflow_mistake({
+                    'agent': 'workflow',
+                    'description': 'dpt-memory END was skipped before dpt-output',
+                    'context': 'No lessons were captured from this session',
+                    'severity': 'high',
+                    'prevention': 'Always call dpt-memory END before dpt-output to capture lessons'
+                })
+                
+                # Return warning to inject into context
+                return False, """
+⚠️ WORKFLOW INCOMPLETE: dpt-memory END was SKIPPED!
+
+No lessons were captured from this session.
+The learning system cannot improve without END calls.
+
+You MUST call: Task(subagent_type: "dpt-memory", prompt: "END: [what was learned]")
+
+This mistake has been recorded for learning.
+"""
+        
+        return True, None
+    except:
+        return True, None
+
+
+def record_workflow_mistake(mistake):
+    """Record a workflow-level mistake for learning."""
+    try:
+        # Record to global mistakes file
+        mistakes_file = memory_dir / 'mistakes.yaml'
+        
+        entry = f"""
+- id: workflow_{datetime.now().strftime('%Y%m%d%H%M%S')}
+  date: {datetime.now().isoformat()}
+  agent: {mistake.get('agent', 'workflow')}
+  mistake: "{mistake.get('description', 'Unknown workflow mistake')}"
+  context: "{mistake.get('context', '')}"
+  prevention: "{mistake.get('prevention', 'Follow the complete workflow')}"
+  severity: {mistake.get('severity', 'medium')}
+"""
+        
+        with open(mistakes_file, 'a', encoding='utf-8') as f:
+            f.write(entry)
+        
+        # Also record to project-specific mistakes if project is known
+        try:
+            from context_index import ContextIndex
+            ci = ContextIndex()
+            current_project = ci.index.get('current_project')
+            if current_project:
+                ci.record_mistake(current_project, mistake)
+        except:
+            pass
+            
+    except:
+        pass
+
+
+def get_lessons_reminder():
+    """Get a reminder about capturing lessons if END was skipped."""
+    try:
+        session_file = memory_dir / 'session_state.json'
+        if not session_file.exists():
+            return None
+        
+        with open(session_file, 'r') as f:
+            state = json.load(f)
+        
+        tracking = state.get('workflow_tracking', {})
+        
+        # If output was called but END wasn't, remind about lessons
+        if tracking.get('output_called') and not tracking.get('lessons_captured'):
+            return """
+🧠 REMINDER: No lessons captured this session!
+
+Call dpt-memory END to record what was learned.
+This improves the system for future sessions.
+"""
+        
+        return None
+    except:
+        return None
+
 def main():
     try:
         # Read input from Droid (Factory AI SubagentStop format)
@@ -293,6 +417,20 @@ def main():
         
         # Refresh project index if files changed during agent run
         refresh_project_index_if_needed()
+        
+        # ============= LEARNING SYSTEM: VERIFICATION LAYER =============
+        # Check if dpt-output ran without dpt-memory END (lesson capture)
+        is_complete, warning_message = check_workflow_completion(agent)
+        
+        if not is_complete and warning_message:
+            # PENALTY SIGNAL: Inject warning and block to force correction
+            output = {
+                "decision": "block",
+                "reason": warning_message
+            }
+            print(json.dumps(output))
+            sys.exit(0)
+        # ================================================================
         
         # Check if we should continue loop (brainstorm mode)
         if should_continue_loop():

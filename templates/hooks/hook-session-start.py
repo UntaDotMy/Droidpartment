@@ -359,29 +359,49 @@ def main():
             additional_context = f"{resume_context} {additional_context}"
         
         # Add Droidpartment INSTRUCTION (not just banner)
-        version = "3.2.7"
+        version = "3.2.9"
         
         # Check if this is a NEW project (not yet in memory)
         is_new_project = project_init and project_init.get('is_first_time', False)
         
+        # Get indexing feedback messages
+        feedback_lines = ""
+        if project_init and project_init.get('feedback'):
+            feedback_lines = "\n".join(project_init['feedback'])
+        
+        # Get project ID for reference
+        project_id = project_init.get('project_id', 'unknown') if project_init else 'unknown'
+        memory_dir = project_init.get('memory_dir', '') if project_init else ''
+        
         if is_new_project:
             # NEW PROJECT - must index first
+            files_created = project_init.get('files_created', []) if project_init else []
+            files_list = ", ".join([f for f in files_created if f])
+            
             droidpartment_instruction = f"""
 🤖 DROIDPARTMENT v{version} ACTIVE - NEW PROJECT DETECTED
 
-⚠️ THIS IS A NEW PROJECT - NOT YET IN MEMORY
-You MUST start by initializing project memory before ANY other work.
+═══════════════════════════════════════════════════════════════════════
+📊 INDEXING COMPLETE - Project registered in memory
+═══════════════════════════════════════════════════════════════════════
+{feedback_lines}
 
-MANDATORY FIRST STEP (do this NOW, before anything else):
-Task(subagent_type: "dpt-memory", prompt: "START: Initialize new project, index codebase structure, understand architecture")
+📋 Project ID: {project_id}
+📁 Memory folder: {memory_dir}
+📄 Files created: {files_list}
+═══════════════════════════════════════════════════════════════════════
+
+✅ Project indexed! Now you can start working.
+
+MANDATORY FIRST STEP (do this NOW):
+Task(subagent_type: "dpt-memory", prompt: "START: {project_init.get('project_name', 'project')} - understand codebase, load context")
 
 This will:
-- Index the project structure
-- Analyze codebase patterns
-- Create project memory folder
-- Learn the project before making changes
+- Load the indexed structure into context
+- Review existing patterns and lessons
+- Prepare for the task
 
-AFTER dpt-memory completes initialization, the UserPromptSubmit hook will guide the specific workflow.
+AFTER dpt-memory completes, the UserPromptSubmit hook will guide the specific workflow.
 
 DO NOT skip this step. DO NOT call other agents before dpt-memory(START).
 """
@@ -390,6 +410,9 @@ DO NOT skip this step. DO NOT call other agents before dpt-memory(START).
             droidpartment_instruction = f"""
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║  🤖 DROIDPARTMENT v{version} ACTIVE - MANDATORY AGENT USAGE                    ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║  📋 Project: {project_id:<54} ║
+║  📁 Memory: {memory_dir[-50:] if len(memory_dir) > 50 else memory_dir:<55} ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║                                                                              ║
 ║  ⛔ FORBIDDEN ACTIONS:                                                       ║

@@ -146,90 +146,82 @@ def get_project_context() -> str:
 
 def detect_task_type(prompt: str) -> dict:
     """
-    Detect task complexity AND type to determine which agents to use.
-    Returns: {complexity: str, agents: list, domain: str}
+    Detect task complexity AND type using ML-inspired pattern recognition.
+    Returns: {complexity: str, agents: list, domains: list, recognition_scores: dict}
+    
+    Uses PatternRecognizer for confidence-based agent selection (0.0 to 1.0).
     """
     prompt_lower = prompt.lower()
     
-    # Base agents (always used)
-    agents = ['dpt-memory', 'dpt-output']
-    domain = 'general'
+    # Use Pattern Recognition system
+    try:
+        from context_index import PatternRecognizer
+        recognizer = PatternRecognizer()
+        
+        # Get recognition scores for all agents
+        recognition_scores = recognizer.recognize_agents(prompt)
+        
+        # Start with recognized agents (sorted by confidence)
+        agents = list(recognition_scores.keys())
+        
+        # Ensure dpt-memory is always first (critical agent)
+        if 'dpt-memory' not in agents:
+            agents.insert(0, 'dpt-memory')
+        elif agents[0] != 'dpt-memory':
+            agents.remove('dpt-memory')
+            agents.insert(0, 'dpt-memory')
+        
+        # Ensure dpt-output is always included
+        if 'dpt-output' not in agents:
+            agents.append('dpt-output')
+        
+        # Record this recognition for learning
+        recognizer.record_recognition(prompt, recognition_scores)
+        
+    except ImportError:
+        # Fallback if PatternRecognizer not available
+        recognition_scores = {}
+        agents = ['dpt-memory', 'dpt-output']
     
-    # Domain detection - which specialized agents to include
-    domain_agents = {
-        'database': ['dpt-data'],
-        'api': ['dpt-api'],
-        'ui': ['dpt-ux'],
-        'devops': ['dpt-ops'],
-        'docs': ['dpt-docs', 'dpt-grammar'],
-        'performance': ['dpt-perf'],
-        'security': ['dpt-sec'],
-    }
-    
-    # Domain keywords
+    # Domain detection for complexity assessment
     domain_keywords = {
-        'database': ['database', 'db', 'sql', 'query', 'schema', 'migration', 'table', 'model', 'orm', 'postgres', 'mysql', 'mongodb', 'prisma'],
-        'api': ['api', 'endpoint', 'rest', 'graphql', 'route', 'controller', 'http', 'request', 'response'],
-        'ui': ['ui', 'ux', 'frontend', 'component', 'page', 'form', 'button', 'layout', 'css', 'style', 'react', 'vue', 'interface', 'design'],
-        'devops': ['deploy', 'ci', 'cd', 'docker', 'kubernetes', 'pipeline', 'aws', 'azure', 'server', 'nginx', 'hosting'],
-        'docs': ['document', 'readme', 'guide', 'tutorial', 'comment', 'jsdoc', 'explain', 'write doc'],
-        'performance': ['performance', 'optimize', 'speed', 'slow', 'cache', 'memory', 'benchmark', 'profil'],
-        'security': ['security', 'auth', 'login', 'password', 'token', 'jwt', 'oauth', 'encrypt', 'vulnerab', 'owasp'],
+        'database': ['database', 'db', 'sql', 'query', 'schema', 'migration', 'table', 'model', 'orm'],
+        'api': ['api', 'endpoint', 'rest', 'graphql', 'route', 'controller', 'http'],
+        'ui': ['ui', 'ux', 'frontend', 'component', 'page', 'form', 'button', 'layout', 'css', 'style'],
+        'devops': ['deploy', 'ci', 'cd', 'docker', 'kubernetes', 'pipeline', 'aws', 'azure'],
+        'docs': ['document', 'readme', 'guide', 'tutorial', 'comment', 'jsdoc'],
+        'performance': ['performance', 'optimize', 'speed', 'slow', 'cache', 'benchmark'],
+        'security': ['security', 'auth', 'login', 'password', 'token', 'jwt', 'oauth', 'encrypt'],
     }
     
-    # Detect domains
     detected_domains = []
     for domain_name, keywords in domain_keywords.items():
         if any(kw in prompt_lower for kw in keywords):
             detected_domains.append(domain_name)
-            agents.extend(domain_agents.get(domain_name, []))
     
-    # Complex task indicators
-    complex_indicators = [
-        'build', 'create new', 'implement system', 'full stack',
-        'api and ui', 'frontend and backend', 'multiple services',
-        'microservices', 'authentication system', 'complete feature',
-        'from scratch', 'entire', 'comprehensive', 'enterprise',
-        'database and api', 'full implementation'
-    ]
-    
-    # Simple task indicators
-    simple_indicators = [
-        'fix typo', 'rename', 'update comment', 'change text',
-        'small fix', 'quick change', 'minor', 'simple', 'tweak'
-    ]
-    
-    # Analysis/review task indicators
-    analysis_indicators = [
-        'analyze', 'understand', 'review', 'audit', 'check', 'examine',
-        'look at', 'explain', 'what is', 'how does', 'codebase', 'structure'
-    ]
-    
-    # Determine complexity
+    # Determine complexity based on recognition and domains
     complexity = 'medium'
     
-    # Check for simple tasks
+    # Simple: Few agents recognized, low total confidence
+    total_confidence = sum(recognition_scores.values())
+    agent_count = len(recognition_scores)
+    
+    simple_indicators = ['fix typo', 'rename', 'update comment', 'small fix', 'quick change', 'minor', 'simple', 'tweak']
+    complex_indicators = ['build', 'create new', 'implement system', 'full stack', 'from scratch', 'entire', 'comprehensive']
+    
     if any(ind in prompt_lower for ind in simple_indicators):
         complexity = 'simple'
-        agents.extend(['dpt-dev', 'dpt-qa'])
-    
-    # Check for analysis tasks
-    elif any(ind in prompt_lower for ind in analysis_indicators):
-        complexity = 'medium'
-        agents.extend(['dpt-research', 'dpt-arch', 'dpt-lead'])
-        if 'security' in prompt_lower or 'audit' in prompt_lower:
-            agents.append('dpt-sec')
-        if 'performance' in prompt_lower:
-            agents.append('dpt-perf')
-    
-    # Check for complex tasks
-    elif any(ind in prompt_lower for ind in complex_indicators) or len(detected_domains) >= 2:
+    elif any(ind in prompt_lower for ind in complex_indicators) or len(detected_domains) >= 2 or agent_count >= 6:
         complexity = 'complex'
-        agents.extend(['dpt-research', 'dpt-product', 'dpt-arch', 'dpt-scrum', 'dpt-dev', 'dpt-qa', 'dpt-sec', 'dpt-lead'])
-    
-    # Default medium
+        # Ensure complex tasks have core agents
+        for core_agent in ['dpt-research', 'dpt-arch', 'dpt-scrum', 'dpt-dev', 'dpt-qa']:
+            if core_agent not in agents:
+                agents.append(core_agent)
     else:
-        agents.extend(['dpt-scrum', 'dpt-dev', 'dpt-qa'])
+        # Medium: ensure basic workflow agents
+        for medium_agent in ['dpt-dev', 'dpt-qa']:
+            if medium_agent not in agents:
+                agents.append(medium_agent)
     
     # Always add review for non-simple tasks
     if complexity != 'simple' and 'dpt-review' not in agents:
@@ -246,7 +238,8 @@ def detect_task_type(prompt: str) -> dict:
     return {
         'complexity': complexity,
         'agents': unique_agents,
-        'domains': detected_domains
+        'domains': detected_domains,
+        'recognition_scores': recognition_scores  # Include scores for visibility
     }
 
 
@@ -259,11 +252,22 @@ def get_workflow_recommendation(task_info: dict, prompt: str) -> str:
     complexity = task_info['complexity']
     agents = task_info['agents']
     domains = task_info.get('domains', [])
+    recognition_scores = task_info.get('recognition_scores', {})
     
     task_summary = prompt[:100] + "..." if len(prompt) > 100 else prompt
     
     # Build domain string
     domain_str = f" (Domains: {', '.join(domains)})" if domains else ""
+    
+    # Build recognition scores visualization (ML-style confidence bars)
+    score_lines = []
+    if recognition_scores:
+        score_lines.append("📊 AGENT RECOGNITION SCORES (ML confidence 0.0-1.0):")
+        for agent, score in list(recognition_scores.items())[:8]:  # Top 8
+            bar = "█" * int(score * 10) + "░" * (10 - int(score * 10))
+            score_lines.append(f"   {agent}: {bar} {score:.2f}")
+    
+    recognition_display = "\n".join(score_lines) if score_lines else ""
     
     mandatory_header = f"""
 ╔══════════════════════════════════════════════════════════════════════════════╗
@@ -278,6 +282,8 @@ def get_workflow_recommendation(task_info: dict, prompt: str) -> str:
 
 DETECTED: {complexity.upper()} task{domain_str}
 AGENTS TO USE: {', '.join(agents)}
+
+{recognition_display}
 """
     
     # Build dynamic workflow based on detected agents
@@ -359,10 +365,11 @@ AGENTS TO USE: {', '.join(agents)}
         steps.append(f'Step {step_num}: Task(subagent_type: "dpt-grammar", prompt: "improve writing quality")')
         step_num += 1
     
-    # Always end with dpt-memory and dpt-output
-    steps.append(f'Step {step_num}: Task(subagent_type: "dpt-memory", prompt: "END: capture lessons learned")')
-    step_num += 1
+    # CRITICAL FINAL STEPS (order matters for learning system!)
+    # Output FIRST (so user sees results), then END (to capture lessons)
     steps.append(f'Step {step_num}: Task(subagent_type: "dpt-output", prompt: "synthesize final report")')
+    step_num += 1
+    steps.append(f'Step {step_num}: ⚠️ REQUIRED - Task(subagent_type: "dpt-memory", prompt: "END: capture lessons learned") - DO NOT SKIP!')
     
     # Determine emoji based on complexity
     emoji = {'simple': '🟢', 'medium': '🟡', 'complex': '🔴'}.get(complexity, '🟡')

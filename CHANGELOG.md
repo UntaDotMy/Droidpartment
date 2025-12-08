@@ -5,6 +5,170 @@ All notable changes to Droidpartment are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.9] - 2025-12-09
+
+### 🎯 Deterministic Project Memory + Pattern Recognition + Visible Feedback
+
+**Problem**: 
+1. Project memory folders used Python's `hash()` which is RANDOMIZED per session - projects got different folders each time!
+2. No visible feedback when indexing completes
+3. No ML-inspired pattern recognition for agent selection
+4. Global and project-specific data were mixed
+
+**Solution**: Complete overhaul of memory system with deterministic naming, pattern recognition, and clear data organization.
+
+### New Features
+
+#### 1. Deterministic Project Naming (CRITICAL FIX)
+```python
+# BEFORE (BROKEN): Python's hash() is randomized!
+project_dir = f"{name}_{hash(path) % 10000}"  # Different each session!
+
+# AFTER (FIXED): MD5 is deterministic
+hash_digest = hashlib.md5(path.encode()).hexdigest()[:8]
+project_dir = f"{name}_{hash_digest}"  # Always "MyProject_a1b2c3d4"
+```
+
+#### 2. Project Registry
+New file `~/.factory/memory/project_registry.json`:
+```json
+{
+  "projects": {
+    "D:\\Projects\\MyApp": {
+      "project_id": "MyApp_a1b2c3d4",
+      "memory_dir": "~/.factory/memory/projects/MyApp_a1b2c3d4"
+    }
+  }
+}
+```
+
+#### 3. ML-Inspired Pattern Recognition
+```python
+class PatternRecognizer:
+    # Like a neural network:
+    # - Input: User prompt
+    # - Weights: Keyword patterns per agent
+    # - Output: Confidence scores (0.0 to 1.0)
+    # - Threshold: Minimum score to trigger call
+    
+    AGENT_PATTERNS = {
+        'dpt-memory': {'weight': 1.0, 'threshold': 0.1},
+        'dpt-dev': {'weight': 0.9, 'threshold': 0.2},
+        'dpt-sec': {'weight': 0.9, 'threshold': 0.35},
+        # ... 18 agents with weights and thresholds
+    }
+```
+
+#### 4. Visible Indexing Feedback
+```
+═══════════════════════════════════════════════════════════════════════
+📊 INDEXING COMPLETE - Project registered in memory
+═══════════════════════════════════════════════════════════════════════
+🆕 NEW PROJECT: MyProject
+📁 Creating memory folder: MyProject_a1b2c3d4
+📊 Indexed 156 files
+✅ Generated STRUCTURE.md
+✅ Created lessons.yaml, mistakes.yaml, patterns.yaml
+✅ Updated files.json
+═══════════════════════════════════════════════════════════════════════
+```
+
+#### 5. Clear Global vs Project-Specific Data
+```
+~/.factory/memory/
+├── [GLOBAL]
+│   ├── context_index.json        # Environment, shell
+│   ├── project_registry.json     # Project path → folder mapping
+│   ├── global_mistakes.yaml      # High-severity (cross-project)
+│   └── recognition_history.json  # ML learning history
+│
+└── projects/
+    └── [PROJECT-SPECIFIC] MyProject_a1b2c3d4/
+        ├── project_index.json    # This project's structure
+        ├── lessons.yaml          # This project's lessons
+        ├── mistakes.yaml         # This project's mistakes
+        └── artifacts/            # Agent outputs
+```
+
+### Changed
+- `context_index.py` → v4 with registry and pattern recognition
+- `hook-session-start.py` → Shows project ID and memory location
+- `hook-user-prompt-submit.py` → Uses PatternRecognizer for agent selection
+- `record_mistake()` → Uses registry-based project directory
+- `get_recent_mistakes()` → Uses registry-based project directory
+- `update_on_file_change()` → Uses registry-based project directory
+
+### Files Created on Index
+| File | Purpose |
+|------|---------|
+| `project_index.json` | Full project structure |
+| `STRUCTURE.md` | Human-readable structure |
+| `files.json` | Quick file lookup |
+| `lessons.yaml` | Project lessons |
+| `mistakes.yaml` | Project mistakes |
+| `patterns.yaml` | Project patterns |
+| `artifacts/` | Agent output folder |
+
+---
+
+## [3.2.8] - 2025-12-09
+
+### 🧠 Learning System: Verification Layer + Penalty Signals
+
+**Inspired by**: How neural networks learn - weights, attention, feedback loops, and penalty signals.
+
+**Problem**: Factory AI was skipping `dpt-memory END` (the lesson capture step), causing no learning between sessions.
+
+**Solution**: Implemented a "verification layer" inspired by supervised learning:
+
+### New Features
+
+#### 1. Workflow Tracking
+```python
+# SubagentStop hook now tracks:
+workflow_tracking = {
+    'memory_start_called': True/False,
+    'memory_end_called': True/False,  # <-- Critical!
+    'output_called': True/False,
+    'lessons_captured': True/False
+}
+```
+
+#### 2. Verification Layer (like ML's loss function)
+- When `dpt-output` runs, checks if `dpt-memory END` was called
+- If skipped → Records as "workflow mistake" (PENALTY)
+- Injects warning to context (FEEDBACK SIGNAL)
+
+#### 3. Penalty Recording (like gradient descent)
+```yaml
+# mistakes.yaml gets entry:
+- id: workflow_20241209...
+  mistake: "dpt-memory END was skipped before dpt-output"
+  severity: high
+  prevention: "Always call dpt-memory END before dpt-output"
+```
+
+#### 4. Reordered Final Steps
+```
+OLD ORDER (confusing):
+  dpt-memory END → dpt-output
+
+NEW ORDER (clearer):
+  dpt-output → ⚠️ REQUIRED dpt-memory END - DO NOT SKIP!
+```
+
+### ML Concepts Applied
+
+| ML Concept | Implementation |
+|------------|----------------|
+| Weights | Instructions in hooks/AGENTS.md |
+| Attention | "⚠️ REQUIRED" markers |
+| Loss Function | check_workflow_completion() |
+| Penalty | record_workflow_mistake() |
+| Gradient | Mistakes file for next session |
+
+---
+
 ## [3.2.7] - 2025-12-08
 
 ### 🛑 "STOP! READ THIS FIRST" - Maximum Visibility
