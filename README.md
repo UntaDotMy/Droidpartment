@@ -31,7 +31,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/agents-18-green?style=flat-square" alt="Agents">
-  <img src="https://img.shields.io/badge/skills-8-blue?style=flat-square" alt="Skills">
+  <img src="https://img.shields.io/badge/skill-1-blue?style=flat-square" alt="Skill">
   <img src="https://img.shields.io/badge/hooks-6-orange?style=flat-square" alt="Hooks">
   <img src="https://img.shields.io/badge/dependencies-0-success?style=flat-square" alt="Dependencies">
 </p>

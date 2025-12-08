@@ -5,6 +5,42 @@ All notable changes to Droidpartment are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.5] - 2025-12-08
+
+### 📦 Simplified to ONE Skill: `droidpartment`
+
+**Problem**: Multiple skills (8 total) were confusing and could conflict with Factory AI's built-in skills like `codebase-analysis`.
+
+**Solution**: Consolidated to ONE comprehensive skill that handles everything.
+
+### Changed
+
+#### Single Skill Architecture
+- Removed 7 skills: `droidpartment-fullstack`, `droidpartment-audit`, `droidpartment-bugfix`, `droidpartment-research`, `codebase-analysis`, `bug-sweep`, `memory`
+- One skill remains: `droidpartment` - handles ALL tasks
+- Auto-routes based on task complexity (simple/medium/complex)
+- References `AGENTS.md` for detailed agent docs
+
+#### Enhanced Main Skill (`droidpartment/SKILL.md`)
+- Added CRITICAL instruction box: "NEVER write code directly, ALWAYS use Task()"
+- Added complexity routing: 🟢 SIMPLE, 🟡 MEDIUM, 🔴 COMPLEX
+- Added complete Task() syntax with `subagent_type` parameter
+- Added all 18 agents table with when-to-use guide
+- Added wave execution pattern with [P]/[S] markers
+- Added examples for bug fix and new feature workflows
+
+### Removed
+
+- `templates/skills/droidpartment-fullstack/` - merged into main
+- `templates/skills/droidpartment-audit/` - handled by main skill
+- `templates/skills/droidpartment-bugfix/` - handled by main skill
+- `templates/skills/droidpartment-research/` - handled by main skill
+- `templates/skills/codebase-analysis/` - conflicts with Factory built-in
+- `templates/skills/bug-sweep/` - handled by main skill
+- `templates/skills/memory/` - handled by dpt-memory agent
+
+---
+
 ## [3.2.4] - 2025-12-08
 
 ### 🆕 New Project Detection & Mandatory Initialization

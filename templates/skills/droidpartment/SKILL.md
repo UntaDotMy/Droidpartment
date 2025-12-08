@@ -1,112 +1,151 @@
 ---
 name: droidpartment
-description: Coordinate 18 expert agents with wave execution, artifacts, and PDCA learning.
+description: Autonomous software development department with 18 expert agents. Use for ANY development task - from bug fixes to full systems.
 ---
 
-# Droidpartment Orchestration
+# 🤖 Droidpartment - Your AI Development Department
 
-Use this skill to coordinate 18 expert agents for development tasks.
+**Read `~/.factory/AGENTS.md` for detailed agent documentation.**
 
-## When to Use
+This skill orchestrates 18 specialized AI agents for ANY software development task.
 
-- **Any development task** - Simple or complex
-- **Multi-domain tasks** - code + tests + docs + security
-- **Tasks requiring learning** - Memory captures lessons
+## ⚠️ CRITICAL: You MUST Use Droidpartment Agents
 
-## All 18 Agents
-
-| Domain | Agent | Expertise |
-|--------|-------|-----------|
-| **Memory** | `dpt-memory` | Learning, lessons, patterns (START/END) |
-| **Output** | `dpt-output` | Final report synthesis (ALWAYS LAST) |
-| **Planning** | `dpt-product` | PRD.md, requirements, user stories |
-| **Planning** | `dpt-scrum` | Task breakdown, [P]/[S] markers, waves |
-| **Design** | `dpt-arch` | ARCHITECTURE.md, patterns, components |
-| **Design** | `dpt-api` | REST endpoints, schemas, OpenAPI |
-| **Design** | `dpt-data` | Database schemas, queries, migrations |
-| **Design** | `dpt-ux` | UI/UX, accessibility, components |
-| **Code** | `dpt-dev` | Implementation, tests, best practices |
-| **Research** | `dpt-research` | Multi-hop research, official docs |
-| **Quality** | `dpt-qa` | Testing, coverage, verification |
-| **Quality** | `dpt-sec` | OWASP, security audit |
-| **Quality** | `dpt-perf` | Performance, optimization |
-| **Review** | `dpt-lead` | Code review, standards |
-| **Review** | `dpt-review` | Simplicity, over-engineering check |
-| **Docs** | `dpt-docs` | Documentation, READMEs |
-| **Docs** | `dpt-grammar` | Writing quality, clarity |
-| **Ops** | `dpt-ops` | CI/CD, Docker, deployment |
-
-## Simple Task Flow
-
-```javascript
-Task(dpt-memory, "START: [task]")
-Task(dpt-dev, "[implement]")
-Task(dpt-qa, "[verify]")
-Task(dpt-memory, "END: [lessons]")
-Task(dpt-output, "summarize")
+```
+┌────────────────────────────────────────────────────────────┐
+│  NEVER write code directly.                                │
+│  ALWAYS use Task(subagent_type: "dpt-*", prompt: "...")    │
+│  ALWAYS start with dpt-memory(START)                       │
+│  ALWAYS end with dpt-memory(END) → dpt-output              │
+└────────────────────────────────────────────────────────────┘
 ```
 
-## Complex Task Flow (Waves)
+## 🎯 Auto-Route Based on Task Complexity
 
+### 🟢 SIMPLE (bug fix, typo, rename, config change)
 ```javascript
-// Wave 1: Init
-Task(dpt-memory, "START: [feature]")
-Task(dpt-research, "[best practices]")
+Task(subagent_type: "dpt-memory", prompt: "START: [describe task]")
+Task(subagent_type: "dpt-dev", prompt: "[implement fix]")
+Task(subagent_type: "dpt-qa", prompt: "verify the fix works")
+Task(subagent_type: "dpt-memory", prompt: "END: what we learned")
+Task(subagent_type: "dpt-output", prompt: "summarize results")
+```
+
+### 🟡 MEDIUM (single feature, endpoint, component)
+```javascript
+Task(subagent_type: "dpt-memory", prompt: "START: [feature name]")
+Task(subagent_type: "dpt-scrum", prompt: "break down into steps")
+Task(subagent_type: "dpt-dev", prompt: "[implement feature]")
+Task(subagent_type: "dpt-qa", prompt: "test feature")
+Task(subagent_type: "dpt-memory", prompt: "END: lessons learned")
+Task(subagent_type: "dpt-output", prompt: "summarize")
+```
+
+### 🔴 COMPLEX (new system, multi-component, full feature)
+```javascript
+// Wave 1: Initialize
+Task(subagent_type: "dpt-memory", prompt: "START: [system name]")
+Task(subagent_type: "dpt-research", prompt: "best practices for [tech]")
 
 // Wave 2: Plan
-Task(dpt-product, "create PRD.md")
+Task(subagent_type: "dpt-product", prompt: "create PRD.md")
 
 // Wave 3: Design
-Task(dpt-arch, "create ARCHITECTURE.md")
+Task(subagent_type: "dpt-arch", prompt: "create ARCHITECTURE.md")
 
 // Wave 4: Breakdown
-Task(dpt-scrum, "create STORIES.md with [P]/[S]")
+Task(subagent_type: "dpt-scrum", prompt: "create STORIES.md")
 
-// Wave 5: Implement (parallel per [P] story)
-Task(dpt-dev, "[component 1]")
-Task(dpt-dev, "[component 2]")
+// Wave 5: Implement (parallel)
+Task(subagent_type: "dpt-dev", prompt: "[component 1]")
+Task(subagent_type: "dpt-dev", prompt: "[component 2]")
 
 // Wave 6: Audit (parallel)
-Task(dpt-qa, "[test]")
-Task(dpt-sec, "[security]")
-Task(dpt-lead, "[review]")
+Task(subagent_type: "dpt-qa", prompt: "test all")
+Task(subagent_type: "dpt-sec", prompt: "security audit")
+Task(subagent_type: "dpt-lead", prompt: "code review")
 
 // Wave 7: Finalize
-Task(dpt-memory, "END: [lessons]")
-Task(dpt-output, "synthesize")
+Task(subagent_type: "dpt-memory", prompt: "END: capture all lessons")
+Task(subagent_type: "dpt-output", prompt: "final report")
 ```
 
-## Parallel Audits
+## 👥 All 18 Agents
 
-These ALWAYS run in parallel:
-```javascript
-Task(dpt-qa, "...")    // [P]
-Task(dpt-sec, "...")   // [P]
-Task(dpt-lead, "...")  // [P]
-Task(dpt-perf, "...")  // [P]
-Task(dpt-review, "...") // [P]
+| Agent | Expertise | When to Use |
+|-------|-----------|-------------|
+| **dpt-memory** | Learning system | ALWAYS first (START) and near-last (END) |
+| **dpt-output** | Report synthesis | ALWAYS the final step |
+| **dpt-product** | PRD, requirements | Complex features needing spec |
+| **dpt-arch** | Architecture | System design, patterns |
+| **dpt-scrum** | Task breakdown | Break work into stories |
+| **dpt-research** | Best practices | Need solutions |
+| **dpt-dev** | Code implementation | Writing code |
+| **dpt-qa** | Testing | Verify implementation |
+| **dpt-sec** | Security audit | Security-sensitive code |
+| **dpt-lead** | Code review | Quality standards |
+| **dpt-review** | Simplicity check | Over-engineering |
+| **dpt-perf** | Performance | Optimization |
+| **dpt-data** | Database | Schema, queries |
+| **dpt-api** | API design | REST endpoints |
+| **dpt-ux** | UI/UX | Frontend design |
+| **dpt-ops** | DevOps | CI/CD, deployment |
+| **dpt-docs** | Documentation | README, guides |
+| **dpt-grammar** | Writing quality | Text improvement |
+
+## 🌊 Wave Execution Pattern
+
+```
+Wave 1 [INIT]:      [P] dpt-memory(START), [P] dpt-research
+Wave 2 [PLAN]:      [S] dpt-product → PRD.md
+Wave 3 [DESIGN]:    [S] dpt-arch → ARCHITECTURE.md  
+Wave 4 [BREAKDOWN]: [S] dpt-scrum → STORIES.md
+Wave 5 [IMPLEMENT]: [P] dpt-dev (per component)
+Wave 6 [AUDIT]:     [P] dpt-qa, [P] dpt-sec, [P] dpt-lead
+Wave 7 [FINALIZE]:  [S] dpt-memory(END), [S] dpt-output
+
+[P] = Parallel (run simultaneously)
+[S] = Sequential (wait for previous)
 ```
 
-## Artifacts (in project memory)
+## 📁 Artifacts Location
 
-| Artifact | Agent | Path |
-|----------|-------|------|
-| PRD.md | dpt-product | ~/.factory/memory/projects/{project}/artifacts/ |
-| ARCHITECTURE.md | dpt-arch | ~/.factory/memory/projects/{project}/artifacts/ |
-| STORIES.md | dpt-scrum | ~/.factory/memory/projects/{project}/artifacts/ |
+All artifacts in project memory (NOT in user's project):
+```
+~/.factory/memory/projects/{project}/artifacts/
+├── PRD.md           (from dpt-product)
+├── ARCHITECTURE.md  (from dpt-arch)
+└── STORIES.md       (from dpt-scrum)
+```
 
-## Example: Auth Feature
+## 🔄 Feedback Loop
 
+If audit finds issues:
+```
+needs_revision: true
+revision_agent: dpt-dev
+revision_reason: "Security issue in auth"
+```
+→ dpt-dev fixes → audits re-run → max 3 revisions
+
+## 💡 Examples
+
+### Bug Fix
 ```javascript
-Task(dpt-memory, "START: JWT authentication")
-Task(dpt-research, "JWT best practices, refresh tokens")
-Task(dpt-product, "create PRD.md for auth")
-Task(dpt-arch, "design auth architecture")
-Task(dpt-scrum, "break down into stories")
-Task(dpt-dev, "implement auth middleware")
-Task(dpt-dev, "implement login endpoint")
-Task(dpt-qa, "test auth flows")
-Task(dpt-sec, "security audit")
-Task(dpt-memory, "END: auth complete")
-Task(dpt-output, "final report")
+Task(subagent_type: "dpt-memory", prompt: "START: fix login timeout bug")
+Task(subagent_type: "dpt-dev", prompt: "fix timeout in auth/token.ts")
+Task(subagent_type: "dpt-qa", prompt: "verify timeout is fixed")
+Task(subagent_type: "dpt-memory", prompt: "END: fixed by increasing token expiry")
+Task(subagent_type: "dpt-output", prompt: "summarize bug fix")
+```
+
+### New Feature
+```javascript
+Task(subagent_type: "dpt-memory", prompt: "START: add user profile page")
+Task(subagent_type: "dpt-product", prompt: "create PRD for profile page")
+Task(subagent_type: "dpt-arch", prompt: "design profile components")
+Task(subagent_type: "dpt-dev", prompt: "implement profile page")
+Task(subagent_type: "dpt-qa", prompt: "test profile functionality")
+Task(subagent_type: "dpt-memory", prompt: "END: profile page complete")
+Task(subagent_type: "dpt-output", prompt: "summarize implementation")
 ```
