@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """
-Factory Droid Hook: PostToolUse (Enhanced v2)
+Factory Droid Hook: PostToolUse (Enhanced v3)
 Triggers after each tool (Edit, Create, Execute, Read, etc.) completes.
 
 Features:
 - Tool usage statistics
 - Error capture and learning
-- File modification tracking
-- Context index updates
+- Live project index updates (files.json, STRUCTURE.md)
+- Mistake recording to project memory
 - Progress tracking
+- Incremental tree updates
 
 Input: JSON from stdin with tool_name, tool_input, tool_response
 Output: Exit 0 for success, no blocking
@@ -149,12 +150,28 @@ def record_error_to_knowledge(error_info):
         except:
             pass
         
+        # Record as mistake to project memory for learning
+        try:
+            from context_index import ContextIndex
+            ci = ContextIndex()
+            current_project = ci.index.get('current_project')
+            if current_project:
+                ci.record_mistake(current_project, {
+                    'agent': 'tool_use',
+                    'description': f"Tool {tool_name} error: {error_type}",
+                    'context': error_info.get('file_path', '') or error_info.get('command', ''),
+                    'prevention': f"Check {error_type} before using {tool_name}",
+                    'severity': 'medium'
+                })
+        except:
+            pass
+        
         return True
     except:
         return False
 
 def track_file_modification(tool_name, tool_input, tool_response):
-    """Track file modifications and update project tree."""
+    """Track file modifications and update project tree incrementally."""
     if tool_name not in ['Edit', 'Create', 'Write', 'MultiEdit']:
         return
     
@@ -166,8 +183,11 @@ def track_file_modification(tool_name, tool_input, tool_response):
         if not file_path:
             return
         
+        # Normalize path
+        file_path = str(Path(file_path).resolve())
+        
         # Determine action
-        action = 'modified' if tool_name == 'Edit' else 'created'
+        action = 'modified' if tool_name in ['Edit', 'MultiEdit'] else 'created'
         
         # Update files_modified tracking
         files_file = memory_dir / 'files_modified.json'
@@ -184,20 +204,23 @@ def track_file_modification(tool_name, tool_input, tool_response):
             'action': action
         }
         
+        # Keep only last 200 files
+        if len(files) > 200:
+            sorted_files = sorted(files.items(), key=lambda x: x[1].get('modified_at', ''))
+            files = dict(sorted_files[-200:])
+        
         with open(files_file, 'w') as f:
             json.dump(files, f, indent=2)
         
-        # Update context index AND project tree
+        # Update context index AND project tree using new method
         try:
             from context_index import ContextIndex
             ci = ContextIndex()
-            ci.record_file_modified(file_path, tool_name)
             
-            # Update project tree if this is a new file
-            if action == 'created':
-                current_project = ci.index.get('current_project')
-                if current_project and file_path.startswith(current_project):
-                    ci.update_project_tree(current_project, file_path, 'created')
+            current_project = ci.index.get('current_project')
+            if current_project:
+                # Use new update_on_file_change method (updates tree + files.json)
+                ci.update_on_file_change(current_project, file_path, action)
         except:
             pass
         

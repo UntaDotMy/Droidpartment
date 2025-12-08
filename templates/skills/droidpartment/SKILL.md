@@ -1,147 +1,112 @@
 ---
 name: droidpartment
-description: 18 expert agents with PDCA learning system. Grows smarter every task.
+description: Coordinate 18 expert agents with wave execution, artifacts, and PDCA learning.
 ---
 
-# Droidpartment - 18 Experts + Memory
+# Droidpartment Orchestration
 
-## HOW TO CALL AGENTS
+Use this skill to coordinate 18 expert agents for development tasks.
 
-**USE TASK TOOL, NOT SKILL TOOL!**
+## When to Use
 
-```javascript
-Task(subagent_type: "dpt-memory", prompt: "START - [task type] for [project]")
-```
+- **Any development task** - Simple or complex
+- **Multi-domain tasks** - code + tests + docs + security
+- **Tasks requiring learning** - Memory captures lessons
 
-## PDCA Learning Cycle
+## All 18 Agents
 
-Every task follows Plan-Do-Check-Act:
+| Domain | Agent | Expertise |
+|--------|-------|-----------|
+| **Memory** | `dpt-memory` | Learning, lessons, patterns (START/END) |
+| **Output** | `dpt-output` | Final report synthesis (ALWAYS LAST) |
+| **Planning** | `dpt-product` | PRD.md, requirements, user stories |
+| **Planning** | `dpt-scrum` | Task breakdown, [P]/[S] markers, waves |
+| **Design** | `dpt-arch` | ARCHITECTURE.md, patterns, components |
+| **Design** | `dpt-api` | REST endpoints, schemas, OpenAPI |
+| **Design** | `dpt-data` | Database schemas, queries, migrations |
+| **Design** | `dpt-ux` | UI/UX, accessibility, components |
+| **Code** | `dpt-dev` | Implementation, tests, best practices |
+| **Research** | `dpt-research` | Multi-hop research, official docs |
+| **Quality** | `dpt-qa` | Testing, coverage, verification |
+| **Quality** | `dpt-sec` | OWASP, security audit |
+| **Quality** | `dpt-perf` | Performance, optimization |
+| **Review** | `dpt-lead` | Code review, standards |
+| **Review** | `dpt-review` | Simplicity, over-engineering check |
+| **Docs** | `dpt-docs` | Documentation, READMEs |
+| **Docs** | `dpt-grammar` | Writing quality, clarity |
+| **Ops** | `dpt-ops` | CI/CD, Docker, deployment |
 
-```
-PLAN  → memory(START), retrieve lessons, define scope
-DO    → Execute with relevant experts
-CHECK → Verify quality (parallel audits OK)
-ACT   → memory(END), capture lessons, output
-```
-
-## Task Flows
-
-### Feature Development
-```
-memory(START) → product → research → arch → scrum
-     → dev → data/api/ux
-     → qa + lead + sec + review (PARALLEL)
-     → docs → memory(END) → output
-```
-
-### Bug Fix
-```
-memory(START) → research (reproduce)
-     → 5 Whys (root cause) → dev → qa (regression test)
-     → qa + lead + sec (PARALLEL)
-     → memory(END) → output
-```
-
-### Audit
-```
-memory(START)
-     → sec + lead + qa + review + perf (ALL PARALLEL)
-     → memory(END) → output
-```
-
-### Research
-```
-memory(START) → research → arch (analyze)
-     → review (simplest?)
-     → memory(END) → output
-```
-
-### Improvement
-```
-memory(START) → perf (BASELINE)
-     → dev (change) → perf (MEASURE)
-     → qa + lead + sec (PARALLEL)
-     → memory(END) → output
-```
-
-## The 18 Experts
-
-| subagent_type | Role |
-|---------------|------|
-| dpt-memory | Learning system (START/END) |
-| dpt-output | Format + stats (LAST) |
-| dpt-product | Requirements |
-| dpt-research | Best practices |
-| dpt-arch | Architecture, ADRs |
-| dpt-scrum | Task breakdown |
-| dpt-dev | Implementation |
-| dpt-data | Database |
-| dpt-api | API design |
-| dpt-ux | UI/UX |
-| dpt-sec | Security (OWASP, CWE) |
-| dpt-lead | Code review (SOLID) |
-| dpt-qa | Testing (pyramid) |
-| dpt-review | Simplicity (YAGNI) |
-| dpt-perf | Performance |
-| dpt-ops | DevOps |
-| dpt-docs | Documentation |
-| dpt-grammar | Grammar |
-
-## Parallel vs Sequential
-
-**PARALLEL OK:**
-- sec + lead + qa + review + perf
-
-**MUST BE SEQUENTIAL:**
-- memory(START) → work → memory(END) → output
-- perf(baseline) → change → perf(measure)
-
-## Memory System
-
-```
-~/.factory/memory/
-├── lessons.yaml     ← What worked
-├── mistakes.yaml    ← What to avoid (+prevention)
-├── patterns.yaml    ← Reusable solutions
-└── projects/        ← Per-project knowledge
-```
-
-## Learning Metrics
-
-```
-IMPROVING:       prevented > new_mistakes
-STABLE:          prevented = new_mistakes
-NEEDS_ATTENTION: prevented < new_mistakes
-```
-
-## Output Format
-
-```
-MEMORY STATUS:
-Project: <name>
-Lessons: <n> (+<new>)
-Mistakes: <n> (+<new>)
-Prevented: <n>
-Learning: Improving/Stable/Needs Attention
-```
-
-## Example: Audit
+## Simple Task Flow
 
 ```javascript
-// 1. Memory START - WAIT
-Task(subagent_type: "dpt-memory", 
-     prompt: "START - audit for MyProject")
+Task(dpt-memory, "START: [task]")
+Task(dpt-dev, "[implement]")
+Task(dpt-qa, "[verify]")
+Task(dpt-memory, "END: [lessons]")
+Task(dpt-output, "summarize")
+```
 
-// 2. Parallel experts
-Task(subagent_type: "dpt-sec", prompt: "Security audit")
-Task(subagent_type: "dpt-lead", prompt: "Code review")
-Task(subagent_type: "dpt-qa", prompt: "Test coverage")
+## Complex Task Flow (Waves)
 
-// 3. Memory END - WAIT (after experts)
-Task(subagent_type: "dpt-memory",
-     prompt: "END - findings: [results]")
+```javascript
+// Wave 1: Init
+Task(dpt-memory, "START: [feature]")
+Task(dpt-research, "[best practices]")
 
-// 4. Output - WAIT (after memory)
-Task(subagent_type: "dpt-output",
-     prompt: "Format with memory stats")
+// Wave 2: Plan
+Task(dpt-product, "create PRD.md")
+
+// Wave 3: Design
+Task(dpt-arch, "create ARCHITECTURE.md")
+
+// Wave 4: Breakdown
+Task(dpt-scrum, "create STORIES.md with [P]/[S]")
+
+// Wave 5: Implement (parallel per [P] story)
+Task(dpt-dev, "[component 1]")
+Task(dpt-dev, "[component 2]")
+
+// Wave 6: Audit (parallel)
+Task(dpt-qa, "[test]")
+Task(dpt-sec, "[security]")
+Task(dpt-lead, "[review]")
+
+// Wave 7: Finalize
+Task(dpt-memory, "END: [lessons]")
+Task(dpt-output, "synthesize")
+```
+
+## Parallel Audits
+
+These ALWAYS run in parallel:
+```javascript
+Task(dpt-qa, "...")    // [P]
+Task(dpt-sec, "...")   // [P]
+Task(dpt-lead, "...")  // [P]
+Task(dpt-perf, "...")  // [P]
+Task(dpt-review, "...") // [P]
+```
+
+## Artifacts (in project memory)
+
+| Artifact | Agent | Path |
+|----------|-------|------|
+| PRD.md | dpt-product | ~/.factory/memory/projects/{project}/artifacts/ |
+| ARCHITECTURE.md | dpt-arch | ~/.factory/memory/projects/{project}/artifacts/ |
+| STORIES.md | dpt-scrum | ~/.factory/memory/projects/{project}/artifacts/ |
+
+## Example: Auth Feature
+
+```javascript
+Task(dpt-memory, "START: JWT authentication")
+Task(dpt-research, "JWT best practices, refresh tokens")
+Task(dpt-product, "create PRD.md for auth")
+Task(dpt-arch, "design auth architecture")
+Task(dpt-scrum, "break down into stories")
+Task(dpt-dev, "implement auth middleware")
+Task(dpt-dev, "implement login endpoint")
+Task(dpt-qa, "test auth flows")
+Task(dpt-sec, "security audit")
+Task(dpt-memory, "END: auth complete")
+Task(dpt-output, "final report")
 ```

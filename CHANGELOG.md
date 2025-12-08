@@ -5,6 +5,123 @@ All notable changes to Droidpartment are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.2] - 2025-12-08
+
+### 🎯 Major Feature: Intelligent Workflow Automation
+
+**Inspired by**: OpenAI Agents, Spec-Kit, Claude-Flow, SuperClaude, BMAD-METHOD, Context-Engine, npcpy, CodeMachine
+
+All improvements follow Factory AI official patterns - **fully automatic, no slash commands**.
+
+### Added
+
+#### Wave Execution Pattern (from Claude-Flow + Spec-Kit)
+- Tasks grouped into **waves** for optimal execution
+- `Wave 1 [INIT]` → `Wave 2 [PLAN]` → `Wave 3 [DESIGN]` → etc.
+- All `[P]` tasks in a wave run simultaneously
+- Wave N+1 starts only after Wave N completes
+
+#### Document Artifact Flow (from BMAD)
+- **dpt-product** creates `.factory/artifacts/PRD.md`
+- **dpt-arch** reads PRD.md, creates `.factory/artifacts/ARCHITECTURE.md`
+- **dpt-scrum** reads both, creates `.factory/artifacts/STORIES.md`
+- Agents read artifacts from previous phases
+
+#### Topology Selection (from Claude-Flow)
+- **Linear**: A → B → C (simple tasks)
+- **Star**: Orchestrator + parallel workers (complex)
+- **Mesh**: All agents can communicate (research)
+
+#### Array-Based Handoffs (from OpenAI Agents)
+- `next_agents: ["dpt-qa", "dpt-sec", "dpt-lead"]` for parallel
+- `handoff_type: parallel` or `sequential`
+- Tracks completed agents in current wave
+
+#### Feedback Loop (from OpenSpec)
+- Audit agents can signal `needs_revision: true`
+- Triggers revision agent with specific reason
+- Loops until approved (max 3 revisions)
+- `can_revise()` checks revision limit
+
+#### New Skill: droidpartment-fullstack
+- Full wave-based workflow for complex features
+- Creates PRD → Architecture → Stories artifacts
+- Parallel implementation and audits
+- Example with all 7 waves
+
+#### Scale-Adaptive Task Detection
+- **UserPromptSubmit hook** auto-detects task complexity
+- `SIMPLE` (< 3 files): Skip dpt-scrum, direct flow
+- `MEDIUM` (3-10 files): Standard PDCA workflow
+- `COMPLEX` (> 10 files): Full spec → arch → scrum → parallel
+- Context injection guides Droid to correct workflow depth
+
+#### Session Persistence
+- **SessionEnd hook** auto-saves session state for resume
+- `~/.factory/memory/sessions/` stores incomplete task state
+- **SessionStart hook** detects resumable sessions
+- Long-running workflow continuation supported
+- Pending tasks and completed agents tracked
+
+#### Parallel Task Markers
+- **dpt-scrum** now marks tasks with `[P]` (parallel) or `[S]` (sequential)
+- Phase-based execution order in output
+- Multiple agents can run simultaneously for [P] tasks
+
+#### Multi-Hop Research
+- **dpt-research** enhanced with 5-hop strategy:
+  1. Initial Query
+  2. Entity Expansion (authors, related topics)
+  3. Depth Search (implementations, patterns)
+  4. Validation (cross-reference)
+  5. Synthesis (confidence scoring)
+- Confidence scoring per finding (0.0-1.0)
+- Only includes findings with confidence >= 0.5
+
+#### Auto-Spec Flow
+- Complex tasks auto-trigger `dpt-product` for specification
+- Detected via keywords: "build", "new system", "full implementation"
+- Injected context tells Droid to spec before implementing
+
+#### Delta Change Tracking
+- **SessionEnd hook** saves delta summaries per session
+- Tracks files created vs modified
+- Stored in `~/.factory/memory/projects/{project}/changes/`
+- Enables audit and review of session work
+
+### Enhanced
+
+#### Project Memory System (v3)
+- First-time project detection with `[🆕 NEW PROJECT]` banner
+- Auto-generates `STRUCTURE.md` (human-readable)
+- Creates project-specific `lessons.yaml`, `mistakes.yaml`, `patterns.yaml`
+- `files.json` for quick file targeting (no ls needed)
+- Incremental index updates on file changes
+
+#### Mistake Prevention
+- Mistakes extracted from agent transcripts
+- Recorded to project memory automatically
+- Recent mistakes shown in context injection
+- `[Avoid: ...]` warnings in Droid context
+
+#### Hook Improvements
+- **hook-user-prompt-submit.py** v2: Scale-adaptive + auto-spec
+- **hook-session-start.py** v3: Resume detection + mistake warnings
+- **hook-session-end.py** v3: Session persistence + delta tracking
+- **hook-post-tool-use.py** v3: Live index updates + mistake recording
+- **hook-subagent-stop.py** v3: Mistake extraction + index refresh
+
+### Comparison with Other Frameworks
+
+| Feature | Droidpartment | Others |
+|---------|---------------|--------|
+| Scale-Adaptive | ✅ Auto | BMAD only |
+| Session Resume | ✅ Auto | Claude-Flow |
+| Parallel Tasks | ✅ [P]/[S] | Spec-Kit |
+| Multi-Hop Research | ✅ 5 hops | SuperClaude |
+| Mistake Learning | ✅ Unique | SuperClaude (case-based) |
+| Zero Dependencies | ✅ | None others |
+
 ## [3.2.0] - 2025-01-15
 
 ### 🎯 Major Feature: Python Infrastructure Integration

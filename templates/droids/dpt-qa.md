@@ -38,21 +38,20 @@ Check project type and run appropriate command:
 
 ## Output Format
 
-```yaml
-tests_run: 45
-tests_passed: 43
-tests_failed: 2
-coverage: "85%"
+```
+Summary: Test suite complete - 43/45 passed (85% coverage)
 
-failures:
-  - test: "auth.test.ts:login"
-    error: "Expected 200, got 401"
-    fix_suggestion: "Check token generation"
+Findings:
+- ✅ 43 tests passed
+- ❌ 2 tests failed
+- Coverage: 85% (target: 80%)
 
-next_agent: dpt-dev  # if fixes needed
-# or
-next_agent: dpt-lead  # if tests pass
-confidence: 90
+Failures:
+- auth.test.ts:login - Expected 200, got 401. Fix: Check token generation
+
+Follow-up:
+- next_agent: dpt-dev (if fixes needed) or dpt-lead (if tests pass)
+- confidence: 90
 ```
 
 ## Loop Support

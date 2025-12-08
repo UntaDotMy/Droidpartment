@@ -8,15 +8,17 @@
   </pre>
 </p>
 
+<h3 align="center">🚀 Multi-Agent Orchestration for Factory AI That Learns From Every Run</h3>
+
 <p align="center">
-  <strong>🤖 18 Expert AI Agents That Learn & Get Smarter Every Run</strong>
+  <strong>18 specialized agents • Wave execution • Automatic memory • Zero dependencies</strong>
 </p>
 
 <p align="center">
   <a href="#-quick-start">Quick Start</a> •
+  <a href="#-why-droidpartment">Why Droidpartment</a> •
   <a href="#-the-experts">The Experts</a> •
-  <a href="#-mandatory-workflow">Workflow</a> •
-  <a href="#-memory-system">Memory</a> •
+  <a href="#-how-it-works">How It Works</a> •
   <a href="#-commands">Commands</a>
 </p>
 
@@ -29,10 +31,111 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/agents-18-green?style=flat-square" alt="Agents">
-  <img src="https://img.shields.io/badge/platform-Factory_AI-purple?style=flat-square" alt="Platform">
-  <img src="https://img.shields.io/badge/node-%3E%3D16.0.0-brightgreen?style=flat-square&logo=node.js" alt="Node">
+  <img src="https://img.shields.io/badge/skills-8-blue?style=flat-square" alt="Skills">
+  <img src="https://img.shields.io/badge/hooks-6-orange?style=flat-square" alt="Hooks">
   <img src="https://img.shields.io/badge/dependencies-0-success?style=flat-square" alt="Dependencies">
 </p>
+
+---
+
+## 🎯 Why Droidpartment?
+
+Unlike generic AI coding assistants, Droidpartment provides **structured, battle-tested workflows** powered by specialized agents who understand software development. Each agent has deep domain expertise—from architecture to security to testing—working together seamlessly.
+
+| Problem | Without Droidpartment | With Droidpartment |
+|---------|----------------------|-------------------|
+| **Task Planning** | AI jumps straight to coding | Automatic PRD → Architecture → Stories breakdown |
+| **Quality** | Hope it works | Parallel audits: Security + QA + Code Review |
+| **Memory** | Forgets everything | Learns from every session, remembers mistakes |
+| **Workflow** | Chaotic, unpredictable | Wave execution with [P]/[S] markers |
+| **Context** | Gets lost in long sessions | Automatic handoffs between agents |
+
+### ✨ Key Benefits
+
+- **Wave Execution** - Tasks grouped into waves for optimal parallel/sequential execution
+- **Document Artifacts** - Automatic PRD.md → ARCHITECTURE.md → STORIES.md flow
+- **Learning Memory** - Captures lessons, patterns, and mistakes across sessions
+- **Zero Config** - Just install and describe your task
+- **18 Specialists** - Each agent has deep expertise in one domain
+
+---
+
+## 🚀 Quick Start
+
+### Get Started in 3 Steps
+
+```bash
+# 1. Install
+npx droidpartment install
+
+# 2. Enable in Factory AI
+#    /settings → Experimental → Custom Droids ✓
+
+# 3. Just describe your task!
+#    "Build a user authentication system with JWT"
+```
+
+That's it. Droidpartment automatically:
+- Detects task complexity
+- Creates PRD and architecture
+- Breaks down into stories
+- Implements with parallel audits
+- Captures lessons learned
+
+---
+
+## 📊 How It Works
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    WAVE EXECUTION FLOW                      │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  Wave 1 [INIT]                                              │
+│  ├─ [P] dpt-memory(START)                                   │
+│  └─ [P] dpt-research                                        │
+│         ↓                                                   │
+│  Wave 2 [PLAN]                                              │
+│  └─ [S] dpt-product → PRD.md                                │
+│         ↓                                                   │
+│  Wave 3 [DESIGN]                                            │
+│  └─ [S] dpt-arch → ARCHITECTURE.md                          │
+│         ↓                                                   │
+│  Wave 4 [BREAKDOWN]                                         │
+│  └─ [S] dpt-scrum → STORIES.md                              │
+│         ↓                                                   │
+│  Wave 5 [IMPLEMENT]                                         │
+│  ├─ [P] dpt-dev (component 1)                               │
+│  └─ [P] dpt-dev (component 2)                               │
+│         ↓                                                   │
+│  Wave 6 [AUDIT]                                             │
+│  ├─ [P] dpt-qa (testing)                                    │
+│  ├─ [P] dpt-sec (security)                                  │
+│  └─ [P] dpt-lead (code review)                              │
+│         ↓                                                   │
+│  Wave 7 [FINALIZE]                                          │
+│  ├─ [S] dpt-memory(END)                                     │
+│  └─ [S] dpt-output                                          │
+│                                                             │
+│  [P] = Parallel (run simultaneously)                        │
+│  [S] = Sequential (wait for previous)                       │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🆚 How Droidpartment Compares
+
+| Feature | Droidpartment | Generic AI | Other Frameworks |
+|---------|---------------|------------|------------------|
+| **Specialized Agents** | 18 experts | 1 generalist | Varies |
+| **Learning Memory** | ✅ Automatic | ❌ None | ⚠️ Manual |
+| **Wave Execution** | ✅ Built-in | ❌ No | ⚠️ Some |
+| **Document Artifacts** | ✅ PRD/Arch/Stories | ❌ No | ⚠️ Some |
+| **Parallel Audits** | ✅ QA+Sec+Review | ❌ No | ⚠️ Manual |
+| **Feedback Loops** | ✅ Auto-revision | ❌ No | ⚠️ Manual |
+| **Dependencies** | 0 | Varies | Many |
+| **Platform** | Factory AI | Any | Varies |
 
 ---
 
@@ -40,11 +143,11 @@
 
 **v3.2.0 introduces Python-powered efficiency to all agents**
 
-Droidpartment now includes three Python modules that eliminate duplicate work across agents:
+Droidpartment includes Python modules that eliminate duplicate work:
 
-- **cache_manager.py** - Pre-caches environment and project structure (24-hour cache for environment, modification-based for project)
-- **memory_system.py** - Three-layer storage (global lessons, session results, project knowledge) for cross-agent communication
-- **handoff_protocol.py** - Structured context transfer between agents to prevent circular dependencies
+- **context_index.py** - Project structure caching and file targeting
+- **shared_context.py** - Agent output storage and parallel handoffs
+- **workflow_state.py** - Wave execution and topology management
 
 ### Zero External Dependencies ✓
 
@@ -386,13 +489,41 @@ Task(subagent_type: "dpt-output", ...)                  // LAST
 
 ## 🛠️ Commands
 
+### Main Commands
+
 | Command | Description |
 |---------|-------------|
-| `npx droidpartment` | Install or update |
-| `npx droidpartment --memory` | Manage/clean memory |
-| `npx droidpartment --uninstall` | Remove completely |
-| `npx droidpartment --help` | Show help |
-| `npx droidpartment --version` | Show version |
+| `npx droidpartment` | Interactive install/update |
+| `npx droidpartment install` | Install to ~/.factory |
+| `npx droidpartment update` | Update to latest version |
+| `npx droidpartment reinstall` | Fresh install (uninstall + install) |
+| `npx droidpartment status` | Check installation status |
+| `npx droidpartment memory` | Manage/clean memory files |
+| `npx droidpartment uninstall` | Remove completely |
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `-y, --yes` | Auto-confirm all prompts |
+| `-q, --quiet` | Minimal output |
+| `-v, --verbose` | Detailed output |
+| `--project` | Install to ./.factory (project-level) |
+| `--force` | Force operation |
+| `--dry-run` | Preview changes |
+| `--purge` | Delete memory on uninstall |
+| `--help` | Show help |
+| `--version` | Show version |
+
+### Examples
+
+```bash
+npx droidpartment install -y         # Quick install
+npx droidpartment update             # Update to latest
+npx droidpartment status             # Check status
+npx droidpartment install --dry-run  # Preview install
+npx droidpartment uninstall --purge  # Remove + delete memory
+```
 
 ---
 

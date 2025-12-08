@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 """
-Context Indexer for Droidpartment (Enhanced v2)
+Context Indexer for Droidpartment (Enhanced v3)
 Indexes project structure, caches context, provides shell-aware commands.
 
 Features:
-- Project tree scanning (runs once per project)
-- File relationship tracking
+- First-time project detection and initialization
+- Project memory folder creation
+- Human-readable STRUCTURE.md generation
+- Live incremental updates when files change
+- File targeting without ls/find commands
 - Shell-aware command suggestions
-- Incremental updates on file changes
-- Environment discovery with command learning
+- Mistake tracking with prevention learning
 
 Pure Python stdlib - no external dependencies.
 """
@@ -639,6 +641,307 @@ class ContextIndex:
         self._save_index()
 
 
+    # ==================== FIRST-TIME PROJECT INITIALIZATION ====================
+    
+    def initialize_project_memory(self, project_path: str) -> Dict:
+        """
+        Initialize project memory for first-time use.
+        Creates project folder, indexes structure, saves STRUCTURE.md.
+        Returns initialization status.
+        """
+        project_path = str(Path(project_path).resolve())
+        project_name = Path(project_path).name
+        
+        # Create project memory folder
+        project_memory_dir = self.projects_dir / f"{project_name}_{hash(project_path) % 10000}"
+        project_memory_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Check if already initialized
+        is_first_time = not self.is_project_indexed(project_path)
+        
+        # Index the project
+        project_index = self.index_project(project_path, force=is_first_time)
+        
+        # Generate STRUCTURE.md for human readability
+        structure_file = project_memory_dir / 'STRUCTURE.md'
+        self._generate_structure_md(project_index, structure_file)
+        
+        # Create project-specific memory files if first time
+        if is_first_time:
+            self._create_project_memory_files(project_memory_dir, project_name)
+        
+        # Save quick-access file list
+        files_json = project_memory_dir / 'files.json'
+        with open(files_json, 'w') as f:
+            json.dump({
+                'files': project_index.get('files', []),
+                'directories': project_index.get('directories', []),
+                'key_files': project_index.get('key_files', {}),
+                'updated_at': datetime.now().isoformat()
+            }, f, indent=2)
+        
+        return {
+            'project_name': project_name,
+            'project_path': project_path,
+            'memory_dir': str(project_memory_dir),
+            'is_first_time': is_first_time,
+            'file_count': project_index.get('stats', {}).get('total_files', 0),
+            'type': project_index.get('type', 'unknown'),
+            'framework': project_index.get('framework')
+        }
+    
+    def _generate_structure_md(self, project_index: Dict, output_path: Path):
+        """Generate human-readable STRUCTURE.md file."""
+        lines = [
+            f"# Project Structure: {project_index.get('name', 'Unknown')}",
+            f"",
+            f"**Type:** {project_index.get('type', 'unknown')}",
+            f"**Framework:** {project_index.get('framework') or 'none'}",
+            f"**Files:** {project_index.get('stats', {}).get('total_files', 0)}",
+            f"**Directories:** {project_index.get('stats', {}).get('total_dirs', 0)}",
+            f"**Indexed:** {project_index.get('indexed_at', 'unknown')}",
+            f"",
+            f"## Key Files",
+            f""
+        ]
+        
+        # Key files by category
+        key_files = project_index.get('key_files', {})
+        for category, files in key_files.items():
+            lines.append(f"### {category.title()}")
+            for f in files[:10]:  # Limit to 10 per category
+                lines.append(f"- `{f}`")
+            lines.append("")
+        
+        # Directory structure (top-level)
+        lines.append("## Directory Structure")
+        lines.append("")
+        lines.append("```")
+        
+        tree = project_index.get('tree', {})
+        self._format_tree(tree, lines, depth=0, max_depth=3)
+        
+        lines.append("```")
+        lines.append("")
+        
+        # Code directories
+        lines.append("## Code Locations")
+        lines.append("")
+        code_dirs = project_index.get('relationships', {}).get('directories_with_code', [])
+        for d in code_dirs[:15]:
+            lines.append(f"- `{d}/`")
+        
+        # Extension breakdown
+        lines.append("")
+        lines.append("## File Types")
+        lines.append("")
+        by_ext = project_index.get('stats', {}).get('by_extension', {})
+        sorted_ext = sorted(by_ext.items(), key=lambda x: x[1], reverse=True)[:10]
+        for ext, count in sorted_ext:
+            lines.append(f"- `{ext}`: {count} files")
+        
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write('\n'.join(lines))
+    
+    def _format_tree(self, tree: Dict, lines: List[str], depth: int = 0, max_depth: int = 3):
+        """Format tree structure for STRUCTURE.md."""
+        if depth > max_depth:
+            return
+        
+        indent = "  " * depth
+        
+        # Files first
+        for f in tree.get('_files', [])[:5]:  # Limit files shown
+            lines.append(f"{indent}├── {f}")
+        
+        if len(tree.get('_files', [])) > 5:
+            lines.append(f"{indent}├── ... ({len(tree['_files']) - 5} more files)")
+        
+        # Then directories
+        dirs = tree.get('_dirs', {})
+        for i, (dir_name, subtree) in enumerate(list(dirs.items())[:10]):
+            is_last = i == len(dirs) - 1 or i == 9
+            prefix = "└──" if is_last else "├──"
+            lines.append(f"{indent}{prefix} {dir_name}/")
+            self._format_tree(subtree, lines, depth + 1, max_depth)
+    
+    def _create_project_memory_files(self, project_dir: Path, project_name: str):
+        """Create project-specific memory files."""
+        # Project lessons
+        lessons_file = project_dir / 'lessons.yaml'
+        if not lessons_file.exists():
+            lessons_file.write_text(f"# Lessons learned for {project_name}\n# Auto-updated by dpt-memory\n\n")
+        
+        # Project mistakes
+        mistakes_file = project_dir / 'mistakes.yaml'
+        if not mistakes_file.exists():
+            mistakes_file.write_text(f"# Mistakes to avoid for {project_name}\n# Auto-updated by dpt-memory\n\n")
+        
+        # Project patterns
+        patterns_file = project_dir / 'patterns.yaml'
+        if not patterns_file.exists():
+            patterns_file.write_text(f"# Patterns for {project_name}\n# Auto-updated by dpt-memory\n\n")
+    
+    # ==================== FILE TARGETING FOR AGENTS ====================
+    
+    def get_files_by_pattern(self, project_path: str, pattern: str) -> List[str]:
+        """Get files matching a pattern (for agents to target files without ls)."""
+        project_index = self.load_project_index(project_path)
+        if not project_index:
+            return []
+        
+        import fnmatch
+        pattern_lower = pattern.lower()
+        matches = []
+        
+        for file_path in project_index.get('files', []):
+            if fnmatch.fnmatch(file_path.lower(), pattern_lower):
+                matches.append(file_path)
+            elif pattern_lower in file_path.lower():
+                matches.append(file_path)
+        
+        return matches
+    
+    def get_files_by_extension(self, project_path: str, extension: str) -> List[str]:
+        """Get all files with a specific extension."""
+        project_index = self.load_project_index(project_path)
+        if not project_index:
+            return []
+        
+        ext = extension.lower() if extension.startswith('.') else f'.{extension.lower()}'
+        return [f for f in project_index.get('files', []) if f.lower().endswith(ext)]
+    
+    def get_file_path(self, project_path: str, filename: str) -> Optional[str]:
+        """Get full path of a file by name (for agents to target exact file)."""
+        project_index = self.load_project_index(project_path)
+        if not project_index:
+            return None
+        
+        filename_lower = filename.lower()
+        for file_path in project_index.get('files', []):
+            if Path(file_path).name.lower() == filename_lower:
+                return str(Path(project_path) / file_path)
+        return None
+    
+    def get_directory_contents(self, project_path: str, directory: str) -> Dict:
+        """Get contents of a specific directory."""
+        project_index = self.load_project_index(project_path)
+        if not project_index:
+            return {'files': [], 'dirs': []}
+        
+        dir_path = directory.strip('/').strip('\\')
+        files = []
+        dirs = set()
+        
+        for file_path in project_index.get('files', []):
+            if file_path.startswith(dir_path + '/') or file_path.startswith(dir_path + '\\'):
+                rel = file_path[len(dir_path)+1:]
+                if '/' in rel or '\\' in rel:
+                    # It's in a subdirectory
+                    subdir = rel.split('/')[0].split('\\')[0]
+                    dirs.add(subdir)
+                else:
+                    files.append(rel)
+        
+        return {'files': files, 'dirs': sorted(list(dirs))}
+    
+    # ==================== MISTAKE TRACKING ====================
+    
+    def record_mistake(self, project_path: str, mistake: Dict):
+        """Record a mistake for learning."""
+        project_path = str(Path(project_path).resolve())
+        project_name = Path(project_path).name
+        project_memory_dir = self.projects_dir / f"{project_name}_{hash(project_path) % 10000}"
+        
+        mistakes_file = project_memory_dir / 'mistakes.yaml'
+        
+        # Create entry
+        entry = f"""
+- id: mistake_{datetime.now().strftime('%Y%m%d%H%M%S')}
+  date: {datetime.now().isoformat()}
+  agent: {mistake.get('agent', 'unknown')}
+  mistake: "{mistake.get('description', 'Unknown mistake')}"
+  context: "{mistake.get('context', '')}"
+  prevention: "{mistake.get('prevention', 'Be more careful')}"
+  severity: {mistake.get('severity', 'medium')}
+"""
+        
+        # Append to file
+        with open(mistakes_file, 'a', encoding='utf-8') as f:
+            f.write(entry)
+        
+        # Also update global mistakes if severe
+        if mistake.get('severity') == 'high':
+            global_mistakes = self.memory_dir / 'mistakes.yaml'
+            with open(global_mistakes, 'a', encoding='utf-8') as f:
+                f.write(entry)
+    
+    def get_recent_mistakes(self, project_path: str, limit: int = 5) -> List[Dict]:
+        """Get recent mistakes for a project."""
+        project_path = str(Path(project_path).resolve())
+        project_name = Path(project_path).name
+        project_memory_dir = self.projects_dir / f"{project_name}_{hash(project_path) % 10000}"
+        
+        mistakes_file = project_memory_dir / 'mistakes.yaml'
+        if not mistakes_file.exists():
+            return []
+        
+        mistakes = []
+        content = mistakes_file.read_text()
+        
+        current = {}
+        for line in content.split('\n'):
+            if line.strip().startswith('- id:'):
+                if current:
+                    mistakes.append(current)
+                current = {'id': line.split(':', 1)[1].strip()}
+            elif ':' in line and current:
+                key, value = line.strip().split(':', 1)
+                key = key.strip().lstrip('- ')
+                current[key] = value.strip().strip('"\'')
+        
+        if current:
+            mistakes.append(current)
+        
+        return mistakes[-limit:]
+    
+    # ==================== INCREMENTAL UPDATE ====================
+    
+    def update_on_file_change(self, project_path: str, file_path: str, action: str):
+        """
+        Update project index when a file changes.
+        Called by hooks when agents create/modify/delete files.
+        
+        Actions: 'created', 'modified', 'deleted'
+        """
+        project_path = str(Path(project_path).resolve())
+        
+        # Update the tree
+        self.update_project_tree(project_path, file_path, action)
+        
+        # Update files.json
+        project_name = Path(project_path).name
+        project_memory_dir = self.projects_dir / f"{project_name}_{hash(project_path) % 10000}"
+        
+        project_index = self.load_project_index(project_path)
+        if project_index:
+            files_json = project_memory_dir / 'files.json'
+            with open(files_json, 'w') as f:
+                json.dump({
+                    'files': project_index.get('files', []),
+                    'directories': project_index.get('directories', []),
+                    'key_files': project_index.get('key_files', {}),
+                    'updated_at': datetime.now().isoformat(),
+                    'last_change': {
+                        'file': file_path,
+                        'action': action
+                    }
+                }, f, indent=2)
+        
+        # Track modification
+        self.record_file_modified(file_path, f'agent_{action}')
+
+
 # Convenience functions
 def get_context_index() -> ContextIndex:
     return ContextIndex()
@@ -650,6 +953,21 @@ def index_current_project(force: bool = False) -> Dict:
     ci = ContextIndex()
     return ci.index_project(os.getcwd(), force=force)
 
+def initialize_project(project_path: str = None) -> Dict:
+    """Initialize project memory (called on first use)."""
+    ci = ContextIndex()
+    return ci.initialize_project_memory(project_path or os.getcwd())
+
+def find_file(filename: str, project_path: str = None) -> Optional[str]:
+    """Find a file by name without ls/find commands."""
+    ci = ContextIndex()
+    return ci.get_file_path(project_path or os.getcwd(), filename)
+
+def list_files(pattern: str = '*', project_path: str = None) -> List[str]:
+    """List files matching pattern without ls command."""
+    ci = ContextIndex()
+    return ci.get_files_by_pattern(project_path or os.getcwd(), pattern)
+
 
 if __name__ == '__main__':
     ci = ContextIndex()
@@ -657,3 +975,7 @@ if __name__ == '__main__':
     print(f"Shell: {ci.index['shell']}")
     print(f"Command for 'list_files': {ci.get_command('list_files')}")
     print(f"\nContext: {ci.get_context_summary()}")
+    
+    # Test project initialization
+    result = ci.initialize_project_memory(os.getcwd())
+    print(f"\nProject initialized: {result}")

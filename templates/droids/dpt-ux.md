@@ -30,21 +30,17 @@ Read("~/.factory/memory/context_index.json")
 
 ## Output Format
 
-```yaml
-components_designed: 3
+```
+Summary: UI/UX design complete - X components designed, accessibility verified
 
-components:
-  - name: "LoginForm"
-    accessibility:
-      - "Labels linked to inputs"
-      - "Error messages announced"
-    
-ui_recommendations:
-  - "Add loading state to submit button"
-  - "Show password strength indicator"
+Findings:
+- Component: LoginForm
+  - Accessibility: Labels linked to inputs, error messages announced
+- Recommendations: Add loading state, show password strength indicator
 
-next_agent: dpt-dev  # to implement
-confidence: 85
+Follow-up:
+- next_agent: dpt-dev (to implement)
+- confidence: 85
 ```
 
 ## What NOT To Do

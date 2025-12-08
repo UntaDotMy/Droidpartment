@@ -1,15 +1,28 @@
 ---
 name: codebase-analysis
-description: Analyzes and understands a codebase structure, patterns, conventions, and architecture. Use when starting work on a new project or understanding existing code.
+description: Analyze codebase structure using dpt-arch and dpt-research agents.
 ---
 
 # Codebase Analysis Skill
 
+Use when starting work on a project to understand structure, patterns, and conventions.
+
 ## When to Use
+
 - Starting work on an unfamiliar project
 - User asks to "understand the codebase"
 - Before making significant changes
 - When patterns/conventions are unclear
+
+## Workflow
+
+```javascript
+Task(dpt-memory, "START: analyze codebase")
+Task(dpt-research, "discover project structure and stack")
+Task(dpt-arch, "analyze architecture and patterns")
+Task(dpt-memory, "END: codebase understood")
+Task(dpt-output, "summarize codebase analysis")
+```
 
 ## Instructions
 

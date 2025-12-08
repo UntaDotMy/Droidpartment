@@ -1,12 +1,28 @@
 ---
-name: global-bug-sweep
-description: Performs a comprehensive cross-cutting bug sweep after all tasks complete. Checks for integration issues, state problems, error handling, and forbidden patterns.
+name: bug-sweep
+description: Comprehensive bug sweep after implementation using dpt-qa and dpt-sec agents.
 ---
 
-# Global Bug Sweep Skill
+# Bug Sweep Skill
+
+Use after implementation to catch integration issues, state problems, and forbidden patterns.
 
 ## When to Use
-Invoke this skill after ALL implementation tasks are complete, before marking the work as done.
+
+- After ALL implementation tasks complete
+- Before marking work as done
+- Pre-release verification
+
+## Workflow
+
+```javascript
+Task(dpt-memory, "START: bug sweep for [scope]")
+Task(dpt-qa, "integration and state verification")
+Task(dpt-sec, "security and forbidden patterns check")
+Task(dpt-review, "simplicity and error handling check")
+Task(dpt-memory, "END: bug sweep complete")
+Task(dpt-output, "summarize findings")
+```
 
 ## Instructions
 
@@ -63,60 +79,24 @@ grep -rn "localhost\|127.0.0.1\|password.*=\|api_key.*=" [modified files]
 ### 6. OUTPUT FORMAT
 
 ```
-═══════════════════════════════════════════════════════════════
-GLOBAL BUG SWEEP RESULTS
-═══════════════════════════════════════════════════════════════
+Summary: Bug sweep complete - X files scanned, Y issues found
 
-Scope: [files modified in this session]
-Status: [CLEAN / ISSUES_FOUND]
+Findings:
+- ✅ Integration: All imports resolve, no circular deps
+- ✅ State: Mutations intentional, async properly handled
+- ✅ Errors: Propagation correct, no swallowed exceptions
+- ⚠️ Forbidden: 1 TODO found in src/api.ts:45
 
-───────────────────────────────────────────────────────────────
-INTEGRATION CHECKS
-───────────────────────────────────────────────────────────────
-[✓] Imports resolve correctly
-[✓] No circular dependencies
-[✓] Types align
-[✓] API contracts match
+Issues:
+- HIGH: [issue] in [file:line] - [fix required]
+- MEDIUM: [issue] in [file:line] - [recommendation]
 
-───────────────────────────────────────────────────────────────
-STATE & DATA FLOW
-───────────────────────────────────────────────────────────────
-[✓] Mutations intentional
-[✓] Type safety preserved
-[✓] Async handled properly
-[✓] No race conditions
+Remediation:
+- Fixed TODO in src/api.ts by implementing the feature
+- No remaining issues
 
-───────────────────────────────────────────────────────────────
-ERROR HANDLING
-───────────────────────────────────────────────────────────────
-[✓] Errors propagate correctly
-[✓] Consistent error types
-[✓] No swallowed exceptions
-[✓] Resources cleaned up
-
-───────────────────────────────────────────────────────────────
-FORBIDDEN PATTERNS
-───────────────────────────────────────────────────────────────
-[✓] No TODO/FIXME
-[✓] No debug statements
-[✓] No hardcoded secrets
-[✓] No commented code
-
-───────────────────────────────────────────────────────────────
-ISSUES FOUND (if any)
-───────────────────────────────────────────────────────────────
-| # | Issue | Location | Severity |
-|---|-------|----------|----------|
-| 1 | [desc] | [file:line] | [H/M/L] |
-
-───────────────────────────────────────────────────────────────
-REMEDIATION
-───────────────────────────────────────────────────────────────
-[Actions taken to fix issues]
-
-═══════════════════════════════════════════════════════════════
-SWEEP COMPLETE: [PASSED / NEEDS_FIXES]
-═══════════════════════════════════════════════════════════════
+Follow-up:
+- Status: PASSED / NEEDS_FIXES
 ```
 
 ## Success Criteria

@@ -29,14 +29,16 @@ Read("~/.factory/memory/context_index.json")
 
 ## Output Format
 
-```yaml
-docs_created:
-  - "docs/getting-started.md"
-docs_updated:
-  - "README.md"
+```
+Summary: Documentation complete - X files created, Y files updated
 
-next_agent: null
-confidence: 90
+Findings:
+- Created docs/getting-started.md - Quick start guide
+- Updated README.md - Added installation section
+
+Follow-up:
+- next_agent: null
+- confidence: 90
 ```
 
 ## What NOT To Do

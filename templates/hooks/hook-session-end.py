@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """
-Factory Droid Hook: SessionEnd (Enhanced v2)
+Factory Droid Hook: SessionEnd (Enhanced v3)
 Triggers when Droid session ends.
 
 Features:
+- Session Persistence for long workflow resume
+- Auto-save incomplete tasks for continuation
 - Save final statistics
 - Archive session data
 - Process captured errors into lessons
+- Delta change summary
 - Cleanup temporary files
 - Persist workflow state
 
@@ -199,6 +202,137 @@ def reset_shared_context():
     except:
         pass
 
+
+def save_session_for_resume(session_id: str, reason: str):
+    """
+    Save session state for potential resume.
+    Enables long-running workflow continuation.
+    """
+    try:
+        sessions_dir = memory_dir / 'sessions'
+        sessions_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Collect current state
+        session_state = {}
+        
+        # Get workflow state
+        try:
+            from workflow_state import WorkflowState
+            ws = WorkflowState()
+            session_state['workflow'] = ws.get_state()
+            session_state['pending_tasks'] = ws.state.get('pending_tasks', [])
+            session_state['completed_agents'] = ws.state.get('agents_completed', [])
+        except:
+            pass
+        
+        # Get shared context (agent outputs)
+        try:
+            from shared_context import SharedContext
+            sc = SharedContext()
+            session_state['agent_outputs'] = sc.context.get('agent_outputs', {})
+            session_state['handoffs'] = sc.context.get('handoffs', [])
+        except:
+            pass
+        
+        # Get current project
+        try:
+            from context_index import ContextIndex
+            ci = ContextIndex()
+            session_state['project_path'] = ci.index.get('current_project')
+        except:
+            pass
+        
+        # Get files modified in this session
+        files_modified_file = memory_dir / 'files_modified.json'
+        if files_modified_file.exists():
+            with open(files_modified_file, 'r') as f:
+                session_state['files_modified'] = json.load(f)
+        
+        # Check if there are incomplete tasks
+        has_incomplete = bool(session_state.get('pending_tasks'))
+        
+        # Save session
+        resume_data = {
+            'session_id': session_id,
+            'saved_at': datetime.now().isoformat(),
+            'exit_reason': reason,
+            'has_incomplete_tasks': has_incomplete,
+            'state': session_state
+        }
+        
+        # Save to session file
+        session_file = sessions_dir / f'{session_id}.json'
+        with open(session_file, 'w') as f:
+            json.dump(resume_data, f, indent=2)
+        
+        # Update active session pointer
+        active_file = sessions_dir / 'active.json'
+        with open(active_file, 'w') as f:
+            json.dump({
+                'session_id': session_id,
+                'saved_at': datetime.now().isoformat(),
+                'has_incomplete': has_incomplete,
+                'project': session_state.get('project_path')
+            }, f, indent=2)
+        
+        return True
+    except:
+        return False
+
+
+def save_delta_summary():
+    """
+    Save a summary of all changes made during this session.
+    For audit and review purposes.
+    """
+    try:
+        files_modified_file = memory_dir / 'files_modified.json'
+        if not files_modified_file.exists():
+            return
+        
+        with open(files_modified_file, 'r') as f:
+            files = json.load(f)
+        
+        if not files:
+            return
+        
+        # Group by action
+        created = [f for f, info in files.items() if info.get('action') == 'created']
+        modified = [f for f, info in files.items() if info.get('action') == 'modified']
+        
+        # Create delta summary
+        delta_summary = {
+            'session_ended': datetime.now().isoformat(),
+            'total_changes': len(files),
+            'files_created': len(created),
+            'files_modified': len(modified),
+            'created_list': created[:20],  # Limit to 20
+            'modified_list': modified[:20]
+        }
+        
+        # Save to project memory if available
+        try:
+            from context_index import ContextIndex
+            ci = ContextIndex()
+            current_project = ci.index.get('current_project')
+            
+            if current_project:
+                project_name = Path(current_project).name
+                project_memory_dir = memory_dir / 'projects' / f"{project_name}_{hash(current_project) % 10000}"
+                changes_dir = project_memory_dir / 'changes'
+                changes_dir.mkdir(parents=True, exist_ok=True)
+                
+                # Save delta
+                delta_file = changes_dir / f"delta_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+                with open(delta_file, 'w') as f:
+                    json.dump(delta_summary, f, indent=2)
+        except:
+            pass
+        
+    except:
+        pass
+
+
 def main():
     try:
         # Read input from Droid (Factory AI SessionEnd format)
@@ -210,11 +344,17 @@ def main():
         # Save session summary
         save_session_summary()
         
+        # Save delta summary (track all changes made)
+        save_delta_summary()
+        
+        # Save session for potential resume (long workflow continuation)
+        save_session_for_resume(session_id, reason)
+        
         # Process errors into potential lessons
         process_errors_to_lessons()
         
         # Only full cleanup on actual exit (not clear/compact)
-        if reason in ['exit', 'logout', 'prompt_input_exit']:
+        if reason in ['exit', 'logout', 'prompt_input_exit', 'other']:
             cleanup_temp_files(keep_errors=True)
             reset_workflow_state()
             reset_shared_context()

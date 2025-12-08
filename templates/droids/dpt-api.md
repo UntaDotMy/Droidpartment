@@ -31,18 +31,18 @@ Read("~/.factory/memory/context_index.json")
 
 ## Output Format
 
-```yaml
-endpoints_designed: 5
+```
+Summary: API design complete - X endpoints defined
 
-endpoints:
-  - method: "POST"
-    path: "/api/v1/users"
-    request: { email: string, password: string }
-    response: { id: string, email: string }
-    status_codes: [201, 400, 409]
+Findings:
+- POST /api/v1/users - Create user
+  - Request: { email: string, password: string }
+  - Response: { id: string, email: string }
+  - Status: 201 (created), 400 (bad request), 409 (conflict)
 
-next_agent: dpt-dev  # to implement
-confidence: 90
+Follow-up:
+- next_agent: dpt-dev (to implement)
+- confidence: 90
 ```
 
 ## What NOT To Do

@@ -35,23 +35,61 @@ Read("~/.factory/memory/context_index.json")
 - Complex patterns for simple problems
 - Configuration for things that never change
 
+## Feedback Loop
+
+If issues require revision, use `needs_revision: true` to trigger another iteration:
+
+```
+revision_needed: true
+revision_reason: "Over-engineering in auth module needs simplification"
+revision_agent: dpt-dev
+```
+
+This creates a **feedback loop** where:
+1. dpt-review finds issues
+2. Signals revision needed
+3. dpt-dev is called again to fix
+4. dpt-review verifies (loop until approved)
+
 ## Output Format
 
-```yaml
-files_reviewed: 4
-over_engineering_found: 2
+### Approved (No Issues)
+```
+Summary: Simplicity review complete - APPROVED
 
-issues:
-  - file: "src/factory.ts"
-    issue: "Factory pattern for single class"
-    suggestion: "Direct instantiation is fine"
-    
-  - file: "src/config.ts"
-    issue: "Config system for 3 values"
-    suggestion: "Simple constants would work"
+Findings:
+- ✅ No over-engineering found
+- ✅ Appropriate complexity for requirements
+- ✅ Clean abstractions
 
-next_agent: dpt-dev  # if simplification needed
-confidence: 85
+Review Status: APPROVED
+
+Follow-up:
+- next_agent: dpt-output
+- needs_revision: false
+- confidence: 95
+```
+
+### Needs Revision (Issues Found)
+```
+Summary: Simplicity review complete - NEEDS REVISION
+
+Findings:
+- ❌ src/factory.ts - Factory pattern for single class (YAGNI)
+- ❌ src/config.ts - Config system for 3 values (over-engineered)
+- ✅ No dead code found
+
+Recommendations:
+- src/factory.ts: Use direct instantiation
+- src/config.ts: Use simple constants
+
+Review Status: NEEDS REVISION
+
+Follow-up:
+- next_agent: dpt-dev
+- needs_revision: true
+- revision_reason: "Simplify factory.ts and config.ts"
+- confidence: 85
 ```
 
 ## What NOT To Do
@@ -59,3 +97,4 @@ confidence: 85
 - Don't fight necessary complexity
 - Don't oversimplify critical systems
 - Don't remove code (just flag it)
+- Don't approve if serious issues exist

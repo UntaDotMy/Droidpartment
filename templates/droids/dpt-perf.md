@@ -30,22 +30,21 @@ Read("~/.factory/memory/context_index.json")
 
 ## Output Format
 
-```yaml
-baseline:
-  metric: "response_time"
-  value: "2.5s"
-  
-bottleneck:
-  location: "src/api/query.ts"
-  issue: "N+1 query pattern"
-  impact: "80% of response time"
+```
+Summary: Performance analysis complete - baseline 2.5s, bottleneck identified
 
-recommendation:
-  change: "Add eager loading"
-  expected_improvement: "60% faster"
+Findings:
+- Baseline: response_time = 2.5s
+- Bottleneck: src/api/query.ts - N+1 query pattern (80% of time)
+- Root cause: Missing eager loading
 
-next_agent: dpt-dev  # to implement
-confidence: 85
+Recommendations:
+- Add eager loading to query.ts
+- Expected improvement: 60% faster
+
+Follow-up:
+- next_agent: dpt-dev (to implement)
+- confidence: 85
 ```
 
 ## What NOT To Do

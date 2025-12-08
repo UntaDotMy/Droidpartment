@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Factory Droid Hook: SubagentStop (Enhanced v2)
+Factory Droid Hook: SubagentStop (Enhanced v3)
 Triggers when a sub-agent (dpt-dev, dpt-qa, dpt-sec, etc.) completes.
 
 Features:
@@ -8,7 +8,8 @@ Features:
 - Loop/brainstorm capability via decision:block
 - Droid usage tracking
 - Workflow state updates
-- Error capture
+- Mistake extraction and recording to project memory
+- Project index refresh on file changes
 
 Input: JSON from stdin with session_id, transcript_path, stop_hook_active
 Output: JSON with optional decision:block to continue iteration
@@ -192,6 +193,76 @@ def update_session_state(agent):
     except:
         pass
 
+def extract_mistakes_from_transcript(transcript_path, agent):
+    """Extract mistakes mentioned in agent output."""
+    if not transcript_path:
+        return []
+    
+    mistakes = []
+    try:
+        transcript_file = Path(transcript_path)
+        if transcript_file.exists():
+            content = transcript_file.read_text(errors='ignore')
+            recent = content[-10000:]  # Check last 10KB
+            
+            # Patterns that indicate mistakes
+            mistake_patterns = [
+                r'(?:mistake|error|bug|issue|problem|wrong|incorrect|failed).*?:?\s*(.{20,100})',
+                r'should have\s+(.{20,80})',
+                r'forgot to\s+(.{20,80})',
+                r'missed\s+(.{20,80})',
+                r'overlooked\s+(.{20,80})',
+            ]
+            
+            for pattern in mistake_patterns:
+                matches = re.findall(pattern, recent, re.IGNORECASE)
+                for match in matches[:2]:  # Limit to 2 per pattern
+                    if len(match) > 20:  # Only meaningful matches
+                        mistakes.append({
+                            'agent': agent,
+                            'description': match.strip()[:100],
+                            'context': 'Extracted from agent output',
+                            'severity': 'low'
+                        })
+    except:
+        pass
+    
+    return mistakes[:3]  # Max 3 mistakes per agent run
+
+def record_agent_mistakes(mistakes):
+    """Record extracted mistakes to project memory."""
+    if not mistakes:
+        return
+    
+    try:
+        from context_index import ContextIndex
+        ci = ContextIndex()
+        current_project = ci.index.get('current_project')
+        
+        if current_project:
+            for mistake in mistakes:
+                mistake['prevention'] = f"Review before completing: {mistake.get('description', '')[:50]}"
+                ci.record_mistake(current_project, mistake)
+    except:
+        pass
+
+def refresh_project_index_if_needed():
+    """Refresh project index if files were changed during agent run."""
+    try:
+        from context_index import ContextIndex
+        ci = ContextIndex()
+        
+        # Check if re-index is needed
+        if ci.index.get('needs_reindex'):
+            current_project = ci.index.get('current_project')
+            if current_project:
+                # Re-initialize project memory
+                ci.initialize_project_memory(current_project)
+                ci.index['needs_reindex'] = False
+                ci._save_index()
+    except:
+        pass
+
 def main():
     try:
         # Read input from Droid (Factory AI SubagentStop format)
@@ -214,6 +285,14 @@ def main():
         update_workflow_state(agent)
         update_droid_stats(agent)
         update_session_state(agent)
+        
+        # Extract and record any mistakes from agent output
+        mistakes = extract_mistakes_from_transcript(transcript_path, agent)
+        if mistakes:
+            record_agent_mistakes(mistakes)
+        
+        # Refresh project index if files changed during agent run
+        refresh_project_index_if_needed()
         
         # Check if we should continue loop (brainstorm mode)
         if should_continue_loop():

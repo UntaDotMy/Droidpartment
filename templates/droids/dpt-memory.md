@@ -23,16 +23,17 @@ When called with "START":
 3. Return ONLY lessons relevant to THIS task (not all lessons)
 
 **Output format:**
-```yaml
-relevant_lessons:
-  - "[lesson_id] summary - how it applies to this task"
-relevant_patterns:
-  - "[pattern_id] summary - when to use"
-mistakes_to_avoid:
-  - "[mistake_id] summary - how to prevent"
+```
+Summary: Retrieved X lessons, Y patterns, Z mistakes relevant to this task
 
-next_agent: null
-confidence: 90
+Findings:
+- [lesson_id] summary - how it applies to this task
+- [pattern_id] summary - when to use
+- [mistake_id] summary - how to prevent
+
+Follow-up:
+- next_agent: null
+- confidence: 90
 ```
 
 ## END - Capture New Learnings
@@ -52,15 +53,17 @@ When called with "END":
 - It's specific (not generic advice)
 
 **Output format:**
-```yaml
-recorded:
-  lessons: 1  # or 0
-  patterns: 0
-  mistakes: 0
-summary: "Recorded lesson about X for future reference"
+```
+Summary: Recorded X new lessons, Y patterns, Z mistakes for future reference
 
-next_agent: dpt-output
-confidence: 95
+Findings:
+- Recorded lesson about [topic] - [context]
+- No new patterns discovered
+- No mistakes to record
+
+Follow-up:
+- next_agent: dpt-output
+- confidence: 95
 ```
 
 ## Memory File Format

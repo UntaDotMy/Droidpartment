@@ -1,17 +1,41 @@
-# Memory Skill - Human-Like Learning System
+---
+name: memory
+description: Memory operations for persistent, project-specific learning.
+---
 
-## Purpose
+# Memory Skill
 
-Provides persistent, project-specific memory that learns from mistakes, gains knowledge automatically, and makes all agents smarter over time.
+Use dpt-memory agent for persistent learning that makes all agents smarter over time.
 
-## Memory Architecture (Based on Human Cognition)
+## When to Use
+
+- **START of any task** - Initialize context
+- **END of any task** - Capture lessons
+- **After success** - Record what worked
+- **After failure** - Record what to avoid
+
+## Workflow
+
+```javascript
+// Always wrap tasks with memory
+Task(dpt-memory, "START: [task description]")
+// ... other agents do work ...
+Task(dpt-memory, "END: [lessons learned]")
+```
+
+## Memory Storage
+
+All memory stored in `~/.factory/memory/` (NOT in user's project):
 
 ```
-.factory/memory/
-├── episodic.yaml      # Specific events: fixes, errors, solutions
-├── semantic.yaml      # General knowledge: patterns, best practices
-├── lessons.yaml       # Lessons learned from mistakes
-└── index.yaml         # Quick lookup tags
+~/.factory/memory/
+├── lessons.yaml       # Lessons learned from tasks
+├── patterns.yaml      # Successful patterns
+├── mistakes.yaml      # What to avoid
+└── projects/
+    └── {project}/     # Project-specific memory
+        ├── artifacts/ # PRD.md, ARCHITECTURE.md, etc.
+        └── mistakes.yaml
 ```
 
 ## Memory Types
@@ -159,6 +183,17 @@ MEMORY PROTOCOL:
 
 ## Per-Project Isolation
 
-Memories stored in `.factory/memory/` within each project.
+Memories stored in `~/.factory/memory/projects/{project}/`.
 No cross-project contamination.
 Each project builds its own knowledge base.
+
+## Example
+
+```javascript
+// Bug fix with memory
+Task(dpt-memory, "START: fix login timeout")
+Task(dpt-dev, "fix timeout in auth/token.ts")
+Task(dpt-qa, "verify fix works")
+Task(dpt-memory, "END: fixed timeout, cause was expired JWT key")
+Task(dpt-output, "summarize fix")
+```

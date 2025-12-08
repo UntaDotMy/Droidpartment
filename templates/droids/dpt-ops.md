@@ -27,19 +27,17 @@ Read("~/.factory/memory/context_index.json")
 
 ## Output Format
 
-```yaml
-files_created:
-  - ".github/workflows/ci.yml"
-  - "Dockerfile"
+```
+Summary: DevOps setup complete - X files created, Y pipeline stages configured
 
-pipeline_stages:
-  - "lint"
-  - "test"
-  - "build"
-  - "deploy"
+Findings:
+- Created .github/workflows/ci.yml - CI/CD pipeline
+- Created Dockerfile - Container definition
+- Pipeline: lint → test → build → deploy
 
-next_agent: null
-confidence: 90
+Follow-up:
+- next_agent: null
+- confidence: 90
 ```
 
 ## What NOT To Do

@@ -16,24 +16,16 @@ You check text for grammar and clarity.
 
 ## Output Format
 
-```yaml
-files_reviewed: 2
-issues_found: 5
+```
+Summary: Grammar check complete - X files reviewed, Y issues found
 
-corrections:
-  - file: "README.md"
-    line: 10
-    original: "Its a great tool"
-    corrected: "It's a great tool"
-    
-  - file: "docs/guide.md"
-    line: 25
-    original: "utilize"
-    corrected: "use"
-    reason: "Simpler word"
+Findings:
+- README.md:10 - "Its a great tool" → "It's a great tool"
+- docs/guide.md:25 - "utilize" → "use" (simpler word)
 
-next_agent: null
-confidence: 95
+Follow-up:
+- next_agent: null
+- confidence: 95
 ```
 
 ## What NOT To Do

@@ -16,6 +16,13 @@ Read("~/.factory/memory/shared_context.json")
 
 This contains outputs from all agents that ran in this session.
 
+## Also Check Project Memory
+
+Read project-specific mistakes to include in report:
+```
+Read("~/.factory/memory/projects/[project]/mistakes.yaml")
+```
+
 ## Your Expert Tasks
 
 1. **Collect all results** - From shared_context.json
@@ -40,10 +47,13 @@ This contains outputs from all agents that ran in this session.
 - **Critical:** [issue]
 - **Warning:** [issue]
 
+## Mistakes Made (Learning)
+- [Agent]: [What went wrong] → [How to prevent]
+
 ## Memory Stats
 - Lessons: X (+N new)
 - Patterns: X
-- Mistakes prevented: X
+- Mistakes: X (+N new, Y prevented)
 
 ## Next Steps (if any)
 - [ ] ...
@@ -51,12 +61,25 @@ This contains outputs from all agents that ran in this session.
 
 ## Output Format
 
-```yaml
-report: |
-  [The formatted report above]
+```
+Summary: Task complete - [one-line overview of what was accomplished]
 
-next_agent: null  # Always null - you're the last
-confidence: 95
+Findings:
+- [Action 1]: [Result]
+- [Action 2]: [Result]
+- Issues found: [count] critical, [count] warnings
+
+Mistakes Made:
+- [Agent made X mistake] → Prevention: [how to avoid]
+
+Memory:
+- Lessons: [X] (+N new)
+- Patterns: [Y]
+- Mistakes: [Z] (+N new, M prevented)
+
+Follow-up:
+- next_agent: null (always null - you're the last)
+- confidence: 95
 ```
 
 ## What NOT To Do

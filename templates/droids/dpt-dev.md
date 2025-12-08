@@ -37,16 +37,17 @@ This gives you:
 
 ## Output Format
 
-```yaml
-files_created:
-  - path/to/file.ts
-files_modified:
-  - path/to/existing.ts
-tests_added:
-  - path/to/file.test.ts
-  
-next_agent: dpt-qa  # or null if done
-confidence: 90
+```
+Summary: Implemented [feature/fix] with X files created, Y files modified
+
+Findings:
+- Created path/to/file.ts - [purpose]
+- Modified path/to/existing.ts - [what changed]
+- Added path/to/file.test.ts - [test coverage]
+
+Follow-up:
+- next_agent: dpt-qa (or null if done)
+- confidence: 90
 ```
 
 ## Loop Support

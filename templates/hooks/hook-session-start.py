@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """
-Factory Droid Hook: SessionStart (Enhanced v2)
+Factory Droid Hook: SessionStart (Enhanced v3)
 Triggers when Droid starts a new session or resumes existing session.
 
 Features:
+- First-time project detection and initialization
+- Project memory folder creation with STRUCTURE.md
 - Environment discovery (cached 24 hours)
-- Memory initialization
-- Context injection for all agents
+- Memory initialization with mistake warnings
+- Context injection for all agents (file targeting without ls)
 - Workflow state initialization
 - Shared context setup
 
@@ -126,28 +128,141 @@ def create_session_state():
     except:
         return False
 
-def index_project_if_needed(cwd):
-    """Index project if not already indexed (runs once per project)."""
+def initialize_project_memory(cwd):
+    """
+    Initialize project memory for first-time use.
+    Creates project folder, indexes structure, saves STRUCTURE.md.
+    Returns initialization info and project index.
+    """
     try:
         from context_index import ContextIndex
         ci = ContextIndex()
         
-        # Check if project needs indexing
-        if not ci.is_project_indexed(cwd):
-            # First time for this project - index it
-            project_index = ci.index_project(cwd)
-            return project_index
-        else:
-            # Already indexed - load existing
-            return ci.load_project_index(cwd)
+        # Check if this is first time for this project
+        is_first_time = not ci.is_project_indexed(cwd)
+        
+        # Initialize project memory (creates folder, STRUCTURE.md, files.json)
+        init_result = ci.initialize_project_memory(cwd)
+        
+        # Load the project index
+        project_index = ci.load_project_index(cwd)
+        
+        return {
+            'is_first_time': is_first_time,
+            'init_result': init_result,
+            'project_index': project_index
+        }
     except ImportError:
         return None
     except Exception as e:
         return None
 
-def build_context_injection(env, memory, workflow_summary, project_index, cwd):
+def get_recent_mistakes(cwd, limit=3):
+    """Get recent mistakes to warn agents."""
+    try:
+        from context_index import ContextIndex
+        ci = ContextIndex()
+        return ci.get_recent_mistakes(cwd, limit)
+    except:
+        return []
+
+
+def check_resumable_session(cwd):
+    """
+    Check if there's a resumable session for the current project.
+    Returns session info if found and has incomplete tasks.
+    """
+    try:
+        sessions_dir = memory_dir / 'sessions'
+        active_file = sessions_dir / 'active.json'
+        
+        if not active_file.exists():
+            return None
+        
+        with open(active_file, 'r') as f:
+            active = json.load(f)
+        
+        # Check if same project and has incomplete tasks
+        if active.get('project') and cwd:
+            # Normalize paths for comparison
+            active_project = str(Path(active.get('project', '')).resolve())
+            current_cwd = str(Path(cwd).resolve())
+            
+            if active_project == current_cwd and active.get('has_incomplete'):
+                # Load full session data
+                session_id = active.get('session_id')
+                session_file = sessions_dir / f'{session_id}.json'
+                
+                if session_file.exists():
+                    with open(session_file, 'r') as f:
+                        return json.load(f)
+        
+        return None
+    except:
+        return None
+
+
+def get_resume_context(resume_data):
+    """Build context injection for resuming a session."""
+    if not resume_data:
+        return ""
+    
+    parts = ["[RESUMABLE SESSION DETECTED]"]
+    
+    state = resume_data.get('state', {})
+    
+    # Pending tasks
+    pending = state.get('pending_tasks', [])
+    if pending:
+        parts.append(f"[Pending tasks from previous session: {len(pending)}]")
+        for task in pending[:3]:
+            parts.append(f"  - {task}")
+    
+    # Completed agents
+    completed = state.get('completed_agents', [])
+    if completed:
+        parts.append(f"[Already completed: {', '.join(completed[-5:])}]")
+    
+    # Last saved time
+    saved_at = resume_data.get('saved_at', '')
+    if saved_at:
+        parts.append(f"[Session saved: {saved_at}]")
+    
+    parts.append("[To continue previous work, ask to 'resume' or 'continue previous task']")
+    
+    return ' '.join(parts)
+
+def get_project_files_summary(cwd):
+    """Get file targeting info for agents (no ls needed)."""
+    try:
+        from context_index import ContextIndex
+        ci = ContextIndex()
+        project_index = ci.load_project_index(cwd)
+        
+        if not project_index:
+            return None
+        
+        # Get key directories
+        code_dirs = project_index.get('relationships', {}).get('directories_with_code', [])[:5]
+        entry_points = project_index.get('relationships', {}).get('entry_points', [])[:3]
+        config_files = project_index.get('key_files', {}).get('config', [])[:3]
+        
+        return {
+            'code_dirs': code_dirs,
+            'entry_points': entry_points,
+            'config_files': config_files,
+            'total_files': project_index.get('stats', {}).get('total_files', 0)
+        }
+    except:
+        return None
+
+def build_context_injection(env, memory, workflow_summary, project_init, cwd, mistakes):
     """Build context string to inject into Droid."""
     parts = []
+    
+    # First-time project indicator
+    if project_init and project_init.get('is_first_time'):
+        parts.append("[🆕 NEW PROJECT - Memory initialized, structure indexed]")
     
     # Environment summary
     if env and not env.get('error'):
@@ -169,6 +284,7 @@ def build_context_injection(env, memory, workflow_summary, project_index, cwd):
         parts.append(f"[Memory: {memory.get('lessons', 0)} lessons, {memory.get('patterns', 0)} patterns, {memory.get('mistakes', 0)} mistakes]")
     
     # Project summary (if indexed)
+    project_index = project_init.get('project_index') if project_init else None
     if project_index:
         proj_name = project_index.get('name', Path(cwd).name)
         proj_type = project_index.get('type', 'unknown')
@@ -181,14 +297,30 @@ def build_context_injection(env, memory, workflow_summary, project_index, cwd):
         proj_str += f" | {file_count} files]"
         parts.append(proj_str)
         
-        # Key directories
-        code_dirs = project_index.get('relationships', {}).get('directories_with_code', [])[:3]
+        # Key directories (agents can target without ls)
+        code_dirs = project_index.get('relationships', {}).get('directories_with_code', [])[:5]
         if code_dirs:
             parts.append(f"[Code in: {', '.join(code_dirs)}]")
+        
+        # Entry points
+        entry_points = project_index.get('relationships', {}).get('entry_points', [])[:3]
+        if entry_points:
+            parts.append(f"[Entry: {', '.join(entry_points)}]")
+    
+    # Recent mistakes to avoid
+    if mistakes:
+        mistake_strs = [f"⚠️ {m.get('mistake', 'unknown')[:50]}" for m in mistakes[:2]]
+        parts.append(f"[Avoid: {'; '.join(mistake_strs)}]")
     
     # Workflow state
     if workflow_summary and '[' in workflow_summary:
         parts.append(workflow_summary)
+    
+    # Memory location for agents
+    if project_init and project_init.get('init_result'):
+        memory_dir = project_init['init_result'].get('memory_dir', '')
+        if memory_dir:
+            parts.append(f"[Project memory: {memory_dir}]")
     
     return ' '.join(parts) if parts else ''
 
@@ -207,15 +339,32 @@ def main():
         initialize_shared_context(session_id)
         create_session_state()
         
-        # Index project (runs once per project, cached)
-        project_index = index_project_if_needed(cwd)
+        # Initialize project memory (first-time: creates folder, STRUCTURE.md, files.json)
+        project_init = initialize_project_memory(cwd)
+        
+        # Get recent mistakes to warn agents
+        mistakes = get_recent_mistakes(cwd, limit=3)
+        
+        # Check for resumable session (long workflow continuation)
+        resume_data = check_resumable_session(cwd)
+        resume_context = get_resume_context(resume_data) if resume_data else ""
         
         # Build context to inject
-        additional_context = build_context_injection(env, memory, workflow_summary, project_index, cwd)
+        additional_context = build_context_injection(
+            env, memory, workflow_summary, project_init, cwd, mistakes
+        )
+        
+        # Add resume context if available
+        if resume_context:
+            additional_context = f"{resume_context} {additional_context}"
         
         # Add Droidpartment banner
         if additional_context:
-            additional_context = f"[Droidpartment v3.2.0] {additional_context}"
+            version = "3.2.2"
+            if project_init and project_init.get('is_first_time'):
+                additional_context = f"[Droidpartment v{version} - NEW PROJECT] {additional_context}"
+            else:
+                additional_context = f"[Droidpartment v{version}] {additional_context}"
         
         # Factory AI JSON output format for SessionStart
         output = {
@@ -233,6 +382,7 @@ def main():
     except Exception as e:
         # Silent fail - don't interrupt Droid
         sys.exit(0)
+
 
 if __name__ == '__main__':
     main()

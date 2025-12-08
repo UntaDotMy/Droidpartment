@@ -35,27 +35,21 @@ Read("~/.factory/memory/context_index.json")
 
 ## Output Format
 
-```yaml
-files_audited: 5
-vulnerabilities_found: 2
+```
+Summary: Security audit complete - X files audited, Y vulnerabilities found
 
-findings:
-  - severity: "critical"
-    type: "SQL Injection"
-    file: "src/db.ts"
-    line: 23
-    issue: "User input directly in query"
-    fix: "Use parameterized queries"
+Findings:
+- CRITICAL: SQL Injection in src/db.ts:23 - User input directly in query
+- MEDIUM: XSS in src/render.ts:45 - Unescaped user content
+- ✅ No issues: Authentication flow, Session management
 
-  - severity: "medium"
-    type: "XSS"
-    file: "src/render.ts"
-    line: 45
-    issue: "Unescaped user content"
-    fix: "Sanitize before rendering"
+Mitigations:
+- src/db.ts: Use parameterized queries
+- src/render.ts: Sanitize before rendering
 
-next_agent: dpt-dev  # if fixes needed
-confidence: 90
+Follow-up:
+- next_agent: dpt-dev (if fixes needed)
+- confidence: 90
 ```
 
 ## What NOT To Do

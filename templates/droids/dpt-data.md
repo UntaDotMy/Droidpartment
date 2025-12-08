@@ -30,21 +30,17 @@ Read("~/.factory/memory/context_index.json")
 
 ## Output Format
 
-```yaml
-tables_designed: 3
+```
+Summary: Database design complete - X tables, Y indexes, Z migrations needed
 
-schema:
-  - table: "users"
-    columns:
-      - { name: "id", type: "uuid", primary: true }
-      - { name: "email", type: "varchar(255)", unique: true }
-    indexes:
-      - { columns: ["email"], unique: true }
+Findings:
+- Table: users (id:uuid PK, email:varchar unique)
+  - Index: email (unique)
+- Migrations needed: 1 (create users table)
 
-migrations_needed: 1
-
-next_agent: dpt-dev  # to implement
-confidence: 90
+Follow-up:
+- next_agent: dpt-dev (to implement)
+- confidence: 90
 ```
 
 ## What NOT To Do

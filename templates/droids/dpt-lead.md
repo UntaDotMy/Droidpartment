@@ -37,23 +37,20 @@ Read("~/.factory/memory/context_index.json")
 
 ## Output Format
 
-```yaml
-files_reviewed: 3
-issues_found: 2
-severity: "medium"
+```
+Summary: Code review complete - 3 files reviewed, 2 issues found (medium severity)
 
-issues:
-  - file: "src/auth.ts"
-    line: 45
-    issue: "Function does too much"
-    suggestion: "Split into validateToken and refreshToken"
+Findings:
+- src/auth.ts:45 - Function does too much (Single Responsibility violation)
+- SOLID principles: 1 violation found
+- ✅ Approved: false
 
-approved: false  # or true if no issues
+Recommendations:
+- src/auth.ts: Split into validateToken and refreshToken
 
-next_agent: dpt-dev  # if fixes needed
-# or
-next_agent: null  # if approved
-confidence: 90
+Follow-up:
+- next_agent: dpt-dev (if fixes needed) or null (if approved)
+- confidence: 90
 ```
 
 ## Loop Support

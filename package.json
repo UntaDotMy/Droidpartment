@@ -1,7 +1,7 @@
 {
   "name": "droidpartment",
-  "version": "3.2.0",
-  "description": "18 Expert Agents - Call specialists directly for security, code review, testing, architecture, and more. Parallel or sequential.",
+  "version": "3.2.2",
+  "description": "🚀 Multi-agent orchestration for Factory AI with 18 specialized agents, wave execution, learning memory, and zero dependencies. Production-grade autonomous development.",
   "author": "Nasri",
   "license": "MIT",
   "bin": {
@@ -12,22 +12,25 @@
     "templates",
     "README.md",
     "CHANGELOG.md",
-    "AGENTS.md",
     "LICENSE"
   ],
   "keywords": [
-    "factory",
-    "droid",
-    "ai",
-    "agents",
-    "software-development",
+    "factory-ai",
+    "multi-agent",
+    "orchestration",
+    "ai-agents",
     "autonomous",
+    "workflow",
+    "wave-execution",
+    "memory-system",
+    "code-review",
+    "security-audit",
     "scrum",
     "devops",
-    "security",
-    "qa",
-    "architect",
-    "code-review"
+    "architecture",
+    "testing",
+    "claude",
+    "droid"
   ],
   "repository": {
     "type": "git",

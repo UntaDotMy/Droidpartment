@@ -1,45 +1,79 @@
 #!/usr/bin/env node
+/**
+ * Droidpartment CLI Installer
+ * 
+ * Commands:
+ *   npx droidpartment                 # Interactive install/update
+ *   npx droidpartment install         # Install to ~/.factory
+ *   npx droidpartment update          # Update existing installation
+ *   npx droidpartment uninstall       # Remove installation
+ *   npx droidpartment status          # Check installation status
+ *   npx droidpartment reinstall       # Uninstall + fresh install
+ *   npx droidpartment memory          # Manage memory files
+ * 
+ * Flags:
+ *   -y, --yes          Auto-confirm all prompts
+ *   -q, --quiet        Minimal output
+ *   -v, --verbose      Detailed output
+ *   --project          Install to ./.factory instead of ~/.factory
+ *   --force            Force overwrite even if same version
+ *   --dry-run          Show what would happen without making changes
+ *   --purge            Delete memory when uninstalling
+ *   --version          Show version
+ *   --help             Show help
+ * 
+ * Exit codes:
+ *   0 = Success
+ *   1 = General error
+ *   2 = Invalid arguments
+ *   3 = Not installed (for status/update/uninstall)
+ *   4 = Already installed (for install without --force)
+ */
 
 const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
 
+// === CONFIGURATION ===
 const TEMPLATES_DIR = path.join(__dirname, '..', 'templates');
 const PERSONAL_DIR = path.join(process.env.HOME || process.env.USERPROFILE, '.factory');
 const PROJECT_DIR = path.join(process.cwd(), '.factory');
 
 // Get version from package.json
 const PACKAGE_JSON = require(path.join(__dirname, '..', 'package.json'));
-const CURRENT_VERSION = PACKAGE_JSON.version; // 3.1.0
+const CURRENT_VERSION = PACKAGE_JSON.version;
 
-const DROIDS = [
-    'dpt-memory', 'dpt-research', 'dpt-scrum', 'dpt-product', 'dpt-arch', 
-    'dpt-dev', 'dpt-lead', 'dpt-qa', 'dpt-sec', 'dpt-ops',
-    'dpt-docs', 'dpt-data', 'dpt-perf', 'dpt-ux', 'dpt-api', 'dpt-grammar', 'dpt-review',
-    'dpt-output'
-];
-
-// Global memory files (shared across all projects)
-const GLOBAL_MEMORY_FILES = ['lessons.yaml', 'patterns.yaml', 'mistakes.yaml', 'stats.yaml'];
-// Per-project memory files (created when working on a project)
-const PROJECT_MEMORY_FILES = ['knowledge.yaml', 'mistakes.yaml', 'stats.yaml'];
+// Exit codes (following CLI best practices)
+const EXIT_SUCCESS = 0;
+const EXIT_ERROR = 1;
+const EXIT_INVALID_ARGS = 2;
+const EXIT_NOT_INSTALLED = 3;
+const EXIT_ALREADY_INSTALLED = 4;
 
 const COLORS = {
     reset: '\x1b[0m',
     bright: '\x1b[1m',
+    dim: '\x1b[2m',
     green: '\x1b[32m',
     yellow: '\x1b[33m',
     blue: '\x1b[34m',
     cyan: '\x1b[36m',
-    red: '\x1b[31m'
+    red: '\x1b[31m',
+    gray: '\x1b[90m'
 };
 
+// Logging with verbosity levels
+let VERBOSITY = 1; // 0=quiet, 1=normal, 2=verbose
+let DRY_RUN = false;
+
 const log = {
-    info: (msg) => console.log(`${COLORS.blue}i${COLORS.reset} ${msg}`),
-    success: (msg) => console.log(`${COLORS.green}✓${COLORS.reset} ${msg}`),
-    warn: (msg) => console.log(`${COLORS.yellow}!${COLORS.reset} ${msg}`),
-    error: (msg) => console.log(`${COLORS.red}✗${COLORS.reset} ${msg}`),
-    header: (msg) => console.log(`\n${COLORS.bright}${COLORS.cyan}${msg}${COLORS.reset}\n`)
+    info: (msg) => VERBOSITY >= 1 && console.log(`${COLORS.blue}ℹ${COLORS.reset} ${msg}`),
+    success: (msg) => VERBOSITY >= 1 && console.log(`${COLORS.green}✓${COLORS.reset} ${msg}`),
+    warn: (msg) => VERBOSITY >= 1 && console.log(`${COLORS.yellow}⚠${COLORS.reset} ${msg}`),
+    error: (msg) => console.error(`${COLORS.red}✗${COLORS.reset} ${msg}`), // Always show errors
+    header: (msg) => VERBOSITY >= 1 && console.log(`\n${COLORS.bright}${COLORS.cyan}${msg}${COLORS.reset}\n`),
+    verbose: (msg) => VERBOSITY >= 2 && console.log(`${COLORS.gray}  ${msg}${COLORS.reset}`),
+    dryRun: (msg) => DRY_RUN && console.log(`${COLORS.yellow}[DRY-RUN]${COLORS.reset} ${msg}`)
 };
 
 function ensureDir(dir) {
@@ -406,6 +440,8 @@ async function uninstall(targetDir, autoYes = false, purgeMemory = false) {
                 delete settings.hooks.SubagentStop;
                 delete settings.hooks.PostToolUse;
                 delete settings.hooks.SessionEnd;
+                delete settings.hooks.PreToolUse;
+                delete settings.hooks.UserPromptSubmit;
                 
                 if (Object.keys(settings.hooks).length === 0) {
                     delete settings.hooks;
@@ -664,19 +700,27 @@ function registerHooks(hooksTarget) {
 
     settings.hooks.SessionStart = [{
         "matcher": "*",
-        "hooks": [{"type": "command", "command": `${pythonCmd} ${hooksPathForward}/hook-session-start.py`}]
+        "hooks": [{"type": "command", "command": `${pythonCmd} ${hooksPathForward}/hook-session-start.py`, "timeout": 30}]
     }];
     settings.hooks.SubagentStop = [{
         "matcher": "*",
-        "hooks": [{"type": "command", "command": `${pythonCmd} ${hooksPathForward}/hook-subagent-stop.py`}]
+        "hooks": [{"type": "command", "command": `${pythonCmd} ${hooksPathForward}/hook-subagent-stop.py`, "timeout": 15}]
     }];
     settings.hooks.PostToolUse = [{
         "matcher": "*",
-        "hooks": [{"type": "command", "command": `${pythonCmd} ${hooksPathForward}/hook-post-tool-use.py`}]
+        "hooks": [{"type": "command", "command": `${pythonCmd} ${hooksPathForward}/hook-post-tool-use.py`, "timeout": 10}]
     }];
     settings.hooks.SessionEnd = [{
         "matcher": "*",
-        "hooks": [{"type": "command", "command": `${pythonCmd} ${hooksPathForward}/hook-session-end.py`}]
+        "hooks": [{"type": "command", "command": `${pythonCmd} ${hooksPathForward}/hook-session-end.py`, "timeout": 30}]
+    }];
+    settings.hooks.PreToolUse = [{
+        "matcher": "*",
+        "hooks": [{"type": "command", "command": `${pythonCmd} ${hooksPathForward}/hook-pre-tool-use.py`, "timeout": 10}]
+    }];
+    settings.hooks.UserPromptSubmit = [{
+        "matcher": "*",
+        "hooks": [{"type": "command", "command": `${pythonCmd} ${hooksPathForward}/hook-user-prompt-submit.py`, "timeout": 15}]
     }];
 
     try {
@@ -765,6 +809,8 @@ function install(targetDir) {
         log.info('  ✓ Context transfer between agents (SubagentStop)');
         log.info('  ✓ Progress tracking (PostToolUse)');
         log.info('  ✓ Session cleanup (SessionEnd)');
+        log.info('  ✓ Tool validation (PreToolUse)');
+        log.info('  ✓ Prompt enrichment (UserPromptSubmit)');
     }
     
     // Register hooks in Factory settings (handles JSONC format)
@@ -796,22 +842,30 @@ function install(targetDir) {
     // Detect Python command (python on Windows, python3 on Unix)
     const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
 
-    // Register 4 hooks with proper paths
+    // Register 6 hooks with proper paths and timeouts (per Factory AI specification)
     settings.hooks.SessionStart = [{
         "matcher": "*",
-        "hooks": [{"type": "command", "command": `${pythonCmd} ${hooksPathForward}/hook-session-start.py`}]
+        "hooks": [{"type": "command", "command": `${pythonCmd} ${hooksPathForward}/hook-session-start.py`, "timeout": 30}]
     }];
     settings.hooks.SubagentStop = [{
         "matcher": "*",
-        "hooks": [{"type": "command", "command": `${pythonCmd} ${hooksPathForward}/hook-subagent-stop.py`}]
+        "hooks": [{"type": "command", "command": `${pythonCmd} ${hooksPathForward}/hook-subagent-stop.py`, "timeout": 15}]
     }];
     settings.hooks.PostToolUse = [{
         "matcher": "*",
-        "hooks": [{"type": "command", "command": `${pythonCmd} ${hooksPathForward}/hook-post-tool-use.py`}]
+        "hooks": [{"type": "command", "command": `${pythonCmd} ${hooksPathForward}/hook-post-tool-use.py`, "timeout": 10}]
     }];
     settings.hooks.SessionEnd = [{
         "matcher": "*",
-        "hooks": [{"type": "command", "command": `${pythonCmd} ${hooksPathForward}/hook-session-end.py`}]
+        "hooks": [{"type": "command", "command": `${pythonCmd} ${hooksPathForward}/hook-session-end.py`, "timeout": 30}]
+    }];
+    settings.hooks.PreToolUse = [{
+        "matcher": "*",
+        "hooks": [{"type": "command", "command": `${pythonCmd} ${hooksPathForward}/hook-pre-tool-use.py`, "timeout": 10}]
+    }];
+    settings.hooks.UserPromptSubmit = [{
+        "matcher": "*",
+        "hooks": [{"type": "command", "command": `${pythonCmd} ${hooksPathForward}/hook-user-prompt-submit.py`, "timeout": 15}]
     }];
 
     try {
@@ -897,32 +951,42 @@ function showAgentList() {
 
 function showHelp() {
     console.log(`
-${COLORS.bright}Droidpartment${COLORS.reset} - 18 Expert AI Agents for Factory AI
+${COLORS.bright}Droidpartment${COLORS.reset} v${CURRENT_VERSION} - 18 Expert AI Agents for Factory AI
 
 ${COLORS.bright}USAGE:${COLORS.reset}
-  npx droidpartment [options]
+  npx droidpartment [command] [options]
+
+${COLORS.bright}COMMANDS:${COLORS.reset}
+  ${COLORS.green}(none)${COLORS.reset}          Interactive install/update (default)
+  ${COLORS.green}install${COLORS.reset}         Install Droidpartment
+  ${COLORS.green}update${COLORS.reset}          Update to latest version
+  ${COLORS.green}reinstall${COLORS.reset}       Fresh install (uninstall + install)
+  ${COLORS.yellow}status${COLORS.reset}          Check installation status
+  ${COLORS.yellow}memory${COLORS.reset}          Manage/clean memory files
+  ${COLORS.red}uninstall${COLORS.reset}       Remove Droidpartment
 
 ${COLORS.bright}OPTIONS:${COLORS.reset}
-  ${COLORS.green}(no args)${COLORS.reset}       Install or update Droidpartment
-  ${COLORS.yellow}--memory, -m${COLORS.reset}    Manage/clean memory files
-  ${COLORS.red}--uninstall, -u${COLORS.reset} Remove Droidpartment
-  ${COLORS.cyan}--check${COLORS.reset}         Verify installation status without changes
-  ${COLORS.cyan}--yes, -y${COLORS.reset}       Auto-confirm prompts (for CI/scripts)
-  ${COLORS.cyan}--purge-memory${COLORS.reset}   Delete memory during uninstall (default: preserve)
-  ${COLORS.cyan}--project${COLORS.reset}       Force project-level install (.factory/)
-  ${COLORS.cyan}--update${COLORS.reset}        Force update even if same version
-  ${COLORS.cyan}--version, -v${COLORS.reset}   Show version number
-  ${COLORS.cyan}--help, -h${COLORS.reset}      Show this help message
+  ${COLORS.cyan}-y, --yes${COLORS.reset}       Auto-confirm all prompts
+  ${COLORS.cyan}-q, --quiet${COLORS.reset}     Minimal output (errors only)
+  ${COLORS.cyan}-v, --verbose${COLORS.reset}   Detailed output
+  ${COLORS.cyan}--project${COLORS.reset}       Install to ./.factory (project-level)
+  ${COLORS.cyan}--force${COLORS.reset}         Force operation even if unnecessary
+  ${COLORS.cyan}--dry-run${COLORS.reset}       Preview changes without applying
+  ${COLORS.cyan}--purge${COLORS.reset}         Delete memory during uninstall
+  ${COLORS.cyan}--version${COLORS.reset}       Show version number
+  ${COLORS.cyan}--help${COLORS.reset}          Show this help message
 
 ${COLORS.bright}EXAMPLES:${COLORS.reset}
-  npx droidpartment              # Interactive install
-  npx droidpartment -y           # Auto-install to personal dir
-  npx droidpartment --check      # Check installation status
-  npx droidpartment --memory     # Manage memory files
-  npx droidpartment -u -y        # Auto-uninstall (preserves memory)
-  npx droidpartment -u -y --purge-memory  # Uninstall and delete memory
+  npx droidpartment                    # Interactive install
+  npx droidpartment install -y         # Auto-install
+  npx droidpartment update             # Update to latest
+  npx droidpartment status             # Check status
+  npx droidpartment reinstall --force  # Force fresh install
+  npx droidpartment uninstall --purge  # Remove + delete memory
+  npx droidpartment memory             # Manage memory
+  npx droidpartment install --dry-run  # Preview install
 
-${COLORS.bright}LEARN MORE:${COLORS.reset}
+${COLORS.bright}MORE INFO:${COLORS.reset}
   https://github.com/UntaDotMy/Droidpartment
 `);
 }
@@ -996,58 +1060,151 @@ function checkInstallation() {
     }
 }
 
+// Parse arguments into command and flags
+function parseArgs(args) {
+    const result = {
+        command: null,
+        flags: {
+            yes: false,
+            quiet: false,
+            verbose: false,
+            project: false,
+            force: false,
+            dryRun: false,
+            purge: false,
+            version: false,
+            help: false
+        }
+    };
+    
+    const commands = ['install', 'update', 'uninstall', 'reinstall', 'status', 'memory'];
+    
+    for (const arg of args) {
+        if (commands.includes(arg)) {
+            result.command = arg;
+        } else if (arg === '-y' || arg === '--yes') {
+            result.flags.yes = true;
+        } else if (arg === '-q' || arg === '--quiet') {
+            result.flags.quiet = true;
+        } else if (arg === '-v' || arg === '--verbose') {
+            result.flags.verbose = true;
+        } else if (arg === '--project') {
+            result.flags.project = true;
+        } else if (arg === '--force') {
+            result.flags.force = true;
+        } else if (arg === '--dry-run') {
+            result.flags.dryRun = true;
+        } else if (arg === '--purge' || arg === '--purge-memory') {
+            result.flags.purge = true;
+        } else if (arg === '--version') {
+            result.flags.version = true;
+        } else if (arg === '-h' || arg === '--help') {
+            result.flags.help = true;
+        } else if (arg === '-u') {
+            result.command = 'uninstall'; // Legacy support
+        } else if (arg === '-m') {
+            result.command = 'memory'; // Legacy support
+        } else if (arg === '--check') {
+            result.command = 'status'; // Legacy support
+        } else if (arg === '--update') {
+            result.flags.force = true; // Legacy: --update means force update
+        } else if (arg.startsWith('-')) {
+            log.warn(`Unknown option: ${arg}`);
+        }
+    }
+    
+    return result;
+}
+
 async function main() {
     const args = process.argv.slice(2);
-    const isUninstall = args.includes('--uninstall') || args.includes('-u');
-    const isMemory = args.includes('--memory') || args.includes('-m');
-    const isCheck = args.includes('--check');
-    const autoYes = args.includes('--yes') || args.includes('-y');
-    const purgeMemory = args.includes('--purge-memory');
-    const forceProject = args.includes('--project');
-    const forceUpdate = args.includes('--update');
-    const showVersion = args.includes('--version') || args.includes('-v');
-    const showHelpFlag = args.includes('--help') || args.includes('-h');
+    const { command, flags } = parseArgs(args);
     
-    // Handle --version
-    if (showVersion) {
+    // Set global flags
+    if (flags.quiet) VERBOSITY = 0;
+    if (flags.verbose) VERBOSITY = 2;
+    DRY_RUN = flags.dryRun;
+    
+    // Handle --version (always works, even in quiet mode)
+    if (flags.version) {
         console.log(`droidpartment v${CURRENT_VERSION}`);
+        process.exit(EXIT_SUCCESS);
         return;
     }
     
     // Handle --help
-    if (showHelpFlag) {
+    if (flags.help) {
         showHelp();
+        process.exit(EXIT_SUCCESS);
         return;
+    }
+    
+    if (DRY_RUN) {
+        log.warn('DRY-RUN MODE: No changes will be made');
     }
     
     showBanner();
     
-    // Handle --check
-    if (isCheck) {
+    // Route to appropriate command
+    const autoYes = flags.yes;
+    const forceProject = flags.project;
+    const forceUpdate = flags.force;
+    const purgeMemory = flags.purge;
+    
+    // Handle status command
+    if (command === 'status') {
         checkInstallation();
+        process.exit(EXIT_SUCCESS);
         return;
     }
     
-    // Handle memory management
-    if (isMemory) {
+    // Handle memory command
+    if (command === 'memory') {
         const personalInstalled = isInstalled(PERSONAL_DIR);
         const projectInstalled = isInstalled(PROJECT_DIR);
         
         if (!personalInstalled && !projectInstalled) {
             log.header('NOT INSTALLED');
             log.warn('Droidpartment is not installed yet.');
-            log.info('Run: npx droidpartment');
+            log.info('Run: npx droidpartment install');
+            process.exit(EXIT_NOT_INSTALLED);
             return;
         }
         
-        // Use the installed location
         const targetDir = forceProject ? PROJECT_DIR : (personalInstalled ? PERSONAL_DIR : PROJECT_DIR);
         await manageMemory(targetDir);
+        process.exit(EXIT_SUCCESS);
         return;
     }
     
-    // Handle uninstall
-    if (isUninstall) {
+    // Handle reinstall command (uninstall + install)
+    if (command === 'reinstall') {
+        const personalInstalled = isInstalled(PERSONAL_DIR);
+        const projectInstalled = isInstalled(PROJECT_DIR);
+        const targetDir = forceProject ? PROJECT_DIR : PERSONAL_DIR;
+        
+        if (personalInstalled || projectInstalled) {
+            const installedDir = personalInstalled ? PERSONAL_DIR : PROJECT_DIR;
+            log.info('Uninstalling current installation...');
+            if (!DRY_RUN) {
+                await uninstall(installedDir, true, purgeMemory);
+            } else {
+                log.dryRun(`Would uninstall from ${installedDir}`);
+            }
+        }
+        
+        log.info('Installing fresh...');
+        if (!DRY_RUN) {
+            install(targetDir);
+        } else {
+            log.dryRun(`Would install to ${targetDir}`);
+        }
+        process.exit(EXIT_SUCCESS);
+        return;
+    }
+    
+    // Handle uninstall command
+    if (command === 'uninstall') {
         const personalInstalled = isInstalled(PERSONAL_DIR);
         const projectInstalled = isInstalled(PROJECT_DIR);
         
@@ -1055,14 +1212,14 @@ async function main() {
             log.header('NOTHING TO UNINSTALL');
             log.info('Droidpartment is not installed anywhere.');
             log.success('Already clean!');
+            process.exit(EXIT_SUCCESS);
             return;
         }
         
         let targetDir;
         if (autoYes) {
-            targetDir = forceProject ? PROJECT_DIR : PERSONAL_DIR;
+            targetDir = forceProject ? PROJECT_DIR : (personalInstalled ? PERSONAL_DIR : PROJECT_DIR);
         } else if (personalInstalled && projectInstalled) {
-            // Both installed, ask which one
             console.log('Droidpartment found in both locations:');
             console.log('');
             console.log(`  ${COLORS.green}1${COLORS.reset}) Personal (${PERSONAL_DIR})`);
@@ -1071,17 +1228,27 @@ async function main() {
             console.log('');
             const choice = await prompt('Which to uninstall? [1/2/3]', '1');
             if (choice === '3') {
-                await uninstall(PERSONAL_DIR, autoYes, purgeMemory);
-                await uninstall(PROJECT_DIR, autoYes, purgeMemory);
+                if (!DRY_RUN) {
+                    await uninstall(PERSONAL_DIR, autoYes, purgeMemory);
+                    await uninstall(PROJECT_DIR, autoYes, purgeMemory);
+                } else {
+                    log.dryRun('Would uninstall from both locations');
+                }
+                process.exit(EXIT_SUCCESS);
                 return;
             }
             targetDir = choice === '2' ? PROJECT_DIR : PERSONAL_DIR;
         } else {
-            // Only one installed, use that one
             targetDir = personalInstalled ? PERSONAL_DIR : PROJECT_DIR;
             log.info(`Found installation in: ${targetDir}`);
         }
-        await uninstall(targetDir, autoYes, purgeMemory);
+        
+        if (!DRY_RUN) {
+            await uninstall(targetDir, autoYes, purgeMemory);
+        } else {
+            log.dryRun(`Would uninstall from ${targetDir}`);
+        }
+        process.exit(EXIT_SUCCESS);
         return;
     }
     

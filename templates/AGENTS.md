@@ -1,104 +1,197 @@
-<coding_guidelines>
-# Droidpartment - YOU MUST USE THESE AGENTS
+# AGENTS.md - Droidpartment Development Guidelines
 
-## CRITICAL: YOU ARE THE COORDINATOR, NOT THE EXECUTOR
+This file provides instructions for AI agents working on this codebase.
 
-**YOU (main droid) DO NOT:**
-- Write code - call `dpt-dev`
-- Create todos - call `dpt-scrum`
-- Review code - call `dpt-lead`
-- Test code - call `dpt-qa`
-- Research - call `dpt-research`
-- Do ANY expert work yourself
+## Project Overview
 
-**YOU ONLY:**
-- Analyze user request
-- Call the right agent(s) via Task tool
-- Pass results between agents
-- Summarize final output to user
+**Droidpartment** is a production-grade multi-agent orchestration system for Factory AI (Droid).
+It provides 18 specialized agents, 8 skills, and 6 hooks for autonomous development workflows.
 
-## MANDATORY WORKFLOW - NO EXCEPTIONS
+## How to Use Droidpartment
 
-```
-EVERY TASK:
-1. Task(dpt-memory, "START: [task description]")
-2. Task(dpt-scrum, "[task]") ← if 3+ steps
-3. Task(dpt-dev/other, "[specific work]")
-4. Task(dpt-qa, "verify [what was done]")  
-5. Task(dpt-memory, "END: [what was learned]")
-6. Task(dpt-output, "synthesize results")
+**ALWAYS use Droidpartment agents for development tasks.** The agents are installed and ready.
+
+### Quick Start
+
+```javascript
+// Simple task
+Task(dpt-memory, "START: [your task]")
+Task(dpt-dev, "[implement your task]")
+Task(dpt-qa, "[verify implementation]")
+Task(dpt-memory, "END: [lessons learned]")
+Task(dpt-output, "summarize results")
 ```
 
-## HOW TO CALL AGENTS
+### Complex Task (Wave Execution)
 
-Use the Task tool with subagent_type:
-```
-Task(
-  subagent_type: "dpt-dev",
-  description: "implement auth",
-  prompt: "Create login endpoint in src/auth.ts..."
-)
-```
+```javascript
+// Wave 1: Initialize
+Task(dpt-memory, "START: [feature name]")
+Task(dpt-research, "[research best practices]")
 
-## AGENT SELECTION GUIDE
+// Wave 2: Plan
+Task(dpt-product, "create PRD.md for [feature]")
 
-| Task Type | Agent to Call |
-|-----------|---------------|
-| Any code changes | dpt-dev |
-| Multi-step planning | dpt-scrum |
-| Code review | dpt-lead |
-| Security check | dpt-sec |
-| Performance | dpt-perf |
-| Testing | dpt-qa |
-| Architecture | dpt-arch |
-| API design | dpt-api |
-| Database | dpt-data |
-| DevOps/CI | dpt-ops |
-| Documentation | dpt-docs |
-| Research | dpt-research |
-| UI/UX | dpt-ux |
-| Simplicity check | dpt-review |
-| Grammar | dpt-grammar |
-| Requirements | dpt-product |
+// Wave 3: Design
+Task(dpt-arch, "create ARCHITECTURE.md")
 
-## EXAMPLE: User asks "create a login page"
+// Wave 4: Breakdown
+Task(dpt-scrum, "break down into stories with [P]/[S] markers")
 
-WRONG (what you've been doing):
-```
-- Read files yourself
-- Write code yourself
-- Test yourself
+// Wave 5: Implement (parallel)
+Task(dpt-dev, "[component 1]")
+Task(dpt-dev, "[component 2]")
+
+// Wave 6: Audit (parallel)
+Task(dpt-qa, "[test]")
+Task(dpt-sec, "[security audit]")
+Task(dpt-lead, "[code review]")
+
+// Wave 7: Finalize
+Task(dpt-memory, "END: [capture lessons]")
+Task(dpt-output, "synthesize final report")
 ```
 
-CORRECT:
+## Available Agents (18 Total)
+
+### Core Agents
+| Agent | Expertise | When to Use |
+|-------|-----------|-------------|
+| `dpt-memory` | PDCA learning, lessons, patterns | ALWAYS first (START) and near-last (END) |
+| `dpt-output` | Report synthesis | ALWAYS last |
+
+### Planning Agents
+| Agent | Expertise | When to Use |
+|-------|-----------|-------------|
+| `dpt-product` | PRD.md, requirements, user stories | Complex features needing spec |
+| `dpt-scrum` | Task breakdown, [P]/[S] markers | Breaking complex work into tasks |
+| `dpt-research` | Multi-hop research, official docs | Need best practices or solutions |
+
+### Design Agents
+| Agent | Expertise | When to Use |
+|-------|-----------|-------------|
+| `dpt-arch` | ARCHITECTURE.md, patterns | System design, component structure |
+| `dpt-api` | REST endpoints, OpenAPI | API design |
+| `dpt-data` | Database schemas, queries | Database work |
+| `dpt-ux` | UI/UX, accessibility | Frontend design |
+
+### Implementation Agents
+| Agent | Expertise | When to Use |
+|-------|-----------|-------------|
+| `dpt-dev` | Code implementation, tests | Writing code |
+| `dpt-ops` | CI/CD, Docker, deployment | DevOps tasks |
+
+### Quality Agents (Run in Parallel)
+| Agent | Expertise | When to Use |
+|-------|-----------|-------------|
+| `dpt-qa` | Testing, verification | After implementation |
+| `dpt-sec` | OWASP, security audit | Security-sensitive code |
+| `dpt-perf` | Performance optimization | Performance concerns |
+| `dpt-lead` | Code review, standards | Code quality check |
+| `dpt-review` | Simplicity check | Over-engineering concerns |
+
+### Documentation Agents
+| Agent | Expertise | When to Use |
+|-------|-----------|-------------|
+| `dpt-docs` | README, guides | Documentation tasks |
+| `dpt-grammar` | Writing quality | Text improvement |
+
+## Parallel Execution Markers
+
+When breaking down tasks, use:
+- `[P]` = Parallel (can run simultaneously)
+- `[S]` = Sequential (must wait for previous)
+
+Example:
 ```
-1. Task(dpt-memory, "START: create login page")
-2. Task(dpt-scrum, "break down login page task")
-3. Task(dpt-dev, "implement login page per scrum plan")
-4. Task(dpt-qa, "verify login page works")
-5. Task(dpt-memory, "END: login page complete")
-6. Task(dpt-output, "summarize what was done")
+[P] dpt-qa    (audit)
+[P] dpt-sec   (audit)
+[P] dpt-lead  (audit)
+[S] dpt-dev   (fix issues from audits)
 ```
 
-## SIMPLE TASKS (< 3 steps)
+## Artifacts Location
 
-Even for simple tasks, still use agents:
+All artifacts are stored in project memory, NOT in user's project:
 ```
-User: "fix typo in README"
-→ Task(dpt-dev, "fix typo in README line X")
+~/.factory/memory/projects/{project}/artifacts/
+  ├── PRD.md           (from dpt-product)
+  ├── ARCHITECTURE.md  (from dpt-arch)
+  └── STORIES.md       (from dpt-scrum)
 ```
 
-## COMMANDS
+## Hooks (Automatic)
 
-- Install: `npx droidpartment`
-- Check: `npx droidpartment --check`
-- Update: `npx droidpartment --update -y`
+These run automatically - no action needed:
+- `SessionStart` - Initializes project memory
+- `UserPromptSubmit` - Detects task complexity
+- `PostToolUse` - Tracks file changes
+- `SubagentStop` - Captures mistakes
+- `SessionEnd` - Saves session for resume
+- `PreToolUse` - Validates operations
 
-## REMEMBER
+## Skills Available
 
-1. You are a COORDINATOR, not an executor
-2. EVERY code change goes through dpt-dev
-3. EVERY task starts with dpt-memory START
-4. EVERY task ends with dpt-memory END + dpt-output
-5. If you catch yourself writing code, STOP and call dpt-dev
-</coding_guidelines>
+```
+droidpartment           # Main orchestration
+droidpartment-fullstack # Full wave workflow
+droidpartment-audit     # Security/quality audit
+droidpartment-bugfix    # Bug fixing workflow
+droidpartment-research  # Research workflow
+bug-sweep               # Codebase bug scan
+codebase-analysis       # Analyze codebase
+memory                  # Memory operations
+```
+
+## Output Format
+
+All agents use this format:
+```
+Summary: [One line summary]
+
+Findings:
+- [Finding 1]
+- [Finding 2]
+
+Follow-up:
+- next_agent: [agent name or null]
+- confidence: [0-100]
+```
+
+## Rules for This Codebase
+
+1. **Use Droidpartment agents** - Don't work alone, delegate to experts
+2. **Start with dpt-memory** - Always initialize context
+3. **End with dpt-output** - Always synthesize results
+4. **Run audits in parallel** - dpt-qa, dpt-sec, dpt-lead together
+5. **Use artifacts** - Let agents create PRD, ARCHITECTURE, STORIES
+6. **Check project memory** - Read `~/.factory/memory/context_index.json`
+
+## Example: Bug Fix
+
+```javascript
+Task(dpt-memory, "START: fix login timeout issue")
+Task(dpt-dev, "investigate and fix login timeout")
+Task(dpt-qa, "verify fix works")
+Task(dpt-sec, "ensure no security regression")
+Task(dpt-memory, "END: timeout fixed, root cause documented")
+Task(dpt-output, "summarize bug fix")
+```
+
+## Example: New Feature
+
+```javascript
+Task(dpt-memory, "START: add user notifications")
+Task(dpt-research, "notification patterns, real-time options")
+Task(dpt-product, "create PRD.md for notifications")
+Task(dpt-arch, "design notification architecture")
+Task(dpt-scrum, "break into stories")
+Task(dpt-dev, "implement notification service")
+Task(dpt-dev, "implement UI components")
+Task(dpt-qa, "test notification flows")
+Task(dpt-sec, "audit notification security")
+Task(dpt-lead, "review code quality")
+Task(dpt-docs, "document notification API")
+Task(dpt-memory, "END: notifications complete")
+Task(dpt-output, "final report")
+```
