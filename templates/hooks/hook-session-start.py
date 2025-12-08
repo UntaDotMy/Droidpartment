@@ -358,13 +358,31 @@ def main():
         if resume_context:
             additional_context = f"{resume_context} {additional_context}"
         
-        # Add Droidpartment banner
+        # Add Droidpartment INSTRUCTION (not just banner)
+        version = "3.2.3"
+        droidpartment_instruction = f"""
+🤖 DROIDPARTMENT v{version} ACTIVE - YOU MUST USE DROIDPARTMENT AGENTS
+
+IMPORTANT: You have access to 18 specialized Droidpartment agents via Task().
+DO NOT implement tasks directly. ALWAYS delegate to the appropriate dpt-* agent.
+
+Available agents: dpt-memory, dpt-dev, dpt-qa, dpt-sec, dpt-arch, dpt-product, 
+dpt-scrum, dpt-research, dpt-lead, dpt-review, dpt-ops, dpt-data, dpt-api, 
+dpt-ux, dpt-docs, dpt-grammar, dpt-perf, dpt-output
+
+MANDATORY WORKFLOW:
+1. ALWAYS start with: Task(subagent_type: "dpt-memory", prompt: "START: [task]")
+2. Delegate work to appropriate agent (dpt-dev for code, dpt-qa for tests, etc.)
+3. ALWAYS end with: Task(subagent_type: "dpt-memory", prompt: "END: [lessons]")
+4. ALWAYS finish with: Task(subagent_type: "dpt-output", prompt: "summarize")
+
+The UserPromptSubmit hook will provide specific workflow steps based on task complexity.
+"""
+        
         if additional_context:
-            version = "3.2.2"
-            if project_init and project_init.get('is_first_time'):
-                additional_context = f"[Droidpartment v{version} - NEW PROJECT] {additional_context}"
-            else:
-                additional_context = f"[Droidpartment v{version}] {additional_context}"
+            additional_context = f"{droidpartment_instruction}\n{additional_context}"
+        else:
+            additional_context = droidpartment_instruction
         
         # Factory AI JSON output format for SessionStart
         output = {

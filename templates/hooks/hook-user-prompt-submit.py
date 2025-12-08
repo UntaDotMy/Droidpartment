@@ -203,14 +203,69 @@ def detect_task_complexity(prompt: str) -> str:
         return 'simple'
 
 
-def get_workflow_recommendation(complexity: str) -> str:
-    """Get workflow recommendation based on complexity."""
+def get_workflow_recommendation(complexity: str, prompt: str) -> str:
+    """Get IMPERATIVE workflow instruction based on complexity.
+    
+    Factory AI needs explicit Task() calls, not just recommendations.
+    This output goes into additionalContext which the main agent sees.
+    """
+    task_summary = prompt[:100] + "..." if len(prompt) > 100 else prompt
+    
     if complexity == 'simple':
-        return "[SIMPLE TASK: Use dpt-dev directly, skip dpt-scrum. Flow: dpt-memory(START) → dpt-dev → dpt-qa → dpt-memory(END) → dpt-output]"
+        return f"""⚡ DROIDPARTMENT WORKFLOW (Simple Task):
+YOU MUST USE THESE EXACT TASK CALLS IN ORDER:
+
+1. Task(subagent_type: "dpt-memory", prompt: "START: {task_summary}")
+2. Task(subagent_type: "dpt-dev", prompt: "[implement the task]")
+3. Task(subagent_type: "dpt-qa", prompt: "[verify implementation]")
+4. Task(subagent_type: "dpt-memory", prompt: "END: [lessons learned]")
+5. Task(subagent_type: "dpt-output", prompt: "summarize results")
+
+DO NOT skip these steps. DO NOT implement directly without calling dpt-dev."""
+
     elif complexity == 'complex':
-        return "[COMPLEX TASK: Full workflow required. Flow: dpt-memory(START) → dpt-product(spec) → dpt-arch(design) → dpt-scrum(breakdown) → parallel execution → dpt-memory(END) → dpt-output]"
-    else:
-        return "[MEDIUM TASK: Standard PDCA. Flow: dpt-memory(START) → dpt-scrum → dpt-dev → dpt-qa → dpt-memory(END) → dpt-output]"
+        return f"""🚀 DROIDPARTMENT WORKFLOW (Complex Task - Full Spec Required):
+YOU MUST USE THESE EXACT TASK CALLS IN ORDER:
+
+Wave 1 - Initialize:
+1. Task(subagent_type: "dpt-memory", prompt: "START: {task_summary}")
+2. Task(subagent_type: "dpt-research", prompt: "research best practices for this task")
+
+Wave 2 - Specification:
+3. Task(subagent_type: "dpt-product", prompt: "create PRD.md with requirements")
+
+Wave 3 - Architecture:
+4. Task(subagent_type: "dpt-arch", prompt: "create ARCHITECTURE.md based on PRD")
+
+Wave 4 - Task Breakdown:
+5. Task(subagent_type: "dpt-scrum", prompt: "break down into stories with [P]/[S] markers")
+
+Wave 5 - Implementation:
+6. Task(subagent_type: "dpt-dev", prompt: "[implement each component]")
+
+Wave 6 - Quality (run these in parallel):
+7. Task(subagent_type: "dpt-qa", prompt: "test implementation")
+8. Task(subagent_type: "dpt-sec", prompt: "security audit")
+9. Task(subagent_type: "dpt-lead", prompt: "code review")
+
+Wave 7 - Finalize:
+10. Task(subagent_type: "dpt-memory", prompt: "END: capture all lessons learned")
+11. Task(subagent_type: "dpt-output", prompt: "synthesize final report")
+
+⚠️ DO NOT skip waves. DO NOT implement directly. Follow this workflow."""
+
+    else:  # medium
+        return f"""📋 DROIDPARTMENT WORKFLOW (Medium Task):
+YOU MUST USE THESE EXACT TASK CALLS IN ORDER:
+
+1. Task(subagent_type: "dpt-memory", prompt: "START: {task_summary}")
+2. Task(subagent_type: "dpt-scrum", prompt: "break down task into steps")
+3. Task(subagent_type: "dpt-dev", prompt: "[implement based on breakdown]")
+4. Task(subagent_type: "dpt-qa", prompt: "verify implementation")
+5. Task(subagent_type: "dpt-memory", prompt: "END: lessons learned")
+6. Task(subagent_type: "dpt-output", prompt: "summarize results")
+
+DO NOT skip these steps. Call each agent in sequence."""
 
 
 def should_auto_spec(prompt: str, complexity: str) -> bool:
@@ -234,10 +289,10 @@ def build_context_injection(prompt: str) -> str:
     """Build context string to inject."""
     parts = []
     
-    # Scale-Adaptive: Detect task complexity and recommend workflow
+    # Scale-Adaptive: Detect task complexity and INSTRUCT workflow
     complexity = detect_task_complexity(prompt)
-    workflow_rec = get_workflow_recommendation(complexity)
-    parts.append(workflow_rec)
+    workflow_instruction = get_workflow_recommendation(complexity, prompt)
+    parts.append(workflow_instruction)
     
     # Auto-Spec: If complex task needs spec first
     if should_auto_spec(prompt, complexity):

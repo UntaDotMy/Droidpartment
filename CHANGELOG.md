@@ -5,6 +5,36 @@ All notable changes to Droidpartment are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.3] - 2025-12-08
+
+### 🔧 Critical Fix: Hooks Now Instruct Factory AI to Use Droidpartment Agents
+
+**Problem**: Hooks were providing context and workflow recommendations, but Factory AI ignored them and used its default agent instead of delegating to dpt-* agents.
+
+**Solution**: Changed hooks from informational to **imperative** - now explicitly tell Factory AI to use Droidpartment agents with exact Task() syntax.
+
+### Fixed
+
+#### SessionStart Hook - Now Instructs Agent Delegation
+- Added mandatory instruction block at session start
+- Lists all 18 available dpt-* agents
+- Provides mandatory workflow pattern
+- Factory AI now knows it MUST delegate to Droidpartment agents
+
+#### UserPromptSubmit Hook - Now Provides Exact Task() Calls
+- Changed from recommendations to **instructions**
+- Provides exact `Task(subagent_type: "dpt-xxx", prompt: "...")` syntax
+- Different workflows for simple/medium/complex tasks
+- Factory AI now has copy-paste Task() calls to execute
+
+### Changed
+
+- `hook-session-start.py`: "DROIDPARTMENT ACTIVE - YOU MUST USE DROIDPARTMENT AGENTS"
+- `hook-user-prompt-submit.py`: "YOU MUST USE THESE EXACT TASK CALLS IN ORDER"
+- Workflow detection now triggers imperative instructions, not passive recommendations
+
+---
+
 ## [3.2.2] - 2025-12-08
 
 ### 🎯 Major Feature: Intelligent Workflow Automation
