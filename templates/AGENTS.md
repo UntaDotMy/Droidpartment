@@ -1,15 +1,34 @@
-# AGENTS.md - Droidpartment Development Guidelines
+# AGENTS.md - MANDATORY INSTRUCTIONS
 
-This file provides instructions for AI agents working on this codebase.
+```
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║  🚨 STOP! READ THIS BEFORE DOING ANYTHING! 🚨                                ║
+║                                                                              ║
+║  YOU MUST USE DROIDPARTMENT AGENTS FOR ALL TASKS.                           ║
+║                                                                              ║
+║  ⛔ FORBIDDEN:                                                               ║
+║     • Writing code directly                                                 ║
+║     • Reading/analyzing files directly                                      ║
+║     • Doing ANY work without calling Task() first                           ║
+║                                                                              ║
+║  ✅ REQUIRED:                                                                ║
+║     • FIRST call: Task(subagent_type: "dpt-memory", prompt: "START: ...")   ║
+║     • Delegate ALL work to dpt-* agents via Task()                          ║
+║     • LAST call: Task(subagent_type: "dpt-output", prompt: "summarize")     ║
+║                                                                              ║
+║  YOUR ONLY JOB IS TO ORCHESTRATE TASK() CALLS.                              ║
+║  THE AGENTS DO THE ACTUAL WORK.                                             ║
+║                                                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+```
 
-## Project Overview
+## What is Droidpartment?
 
-**Droidpartment** is a production-grade multi-agent orchestration system for Factory AI (Droid).
-It provides 18 specialized agents, 8 skills, and 6 hooks for autonomous development workflows.
+**Droidpartment** is 18 specialized AI agents that you MUST delegate work to.
+You are the orchestrator. They are the workers. Call them via `Task()`.
 
-## How to Use Droidpartment
-
-**ALWAYS use Droidpartment agents for development tasks.** The agents are installed and ready.
+## MANDATORY: First Action for ANY Task
 
 ### Quick Start
 

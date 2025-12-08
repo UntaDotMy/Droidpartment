@@ -5,6 +5,35 @@ All notable changes to Droidpartment are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.7] - 2025-12-08
+
+### 🛑 "STOP! READ THIS FIRST" - Maximum Visibility
+
+**Problem**: Factory AI was STILL ignoring Droidpartment instructions and doing work directly. The hooks add context but Factory AI's autonomous behavior overrides them.
+
+**Solution**: Made AGENTS.md and SKILL.md headers EXTREMELY visible with "STOP!" commands.
+
+### Changed
+
+#### AGENTS.md - Now starts with STOP command
+```
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  🚨 STOP! READ THIS BEFORE DOING ANYTHING! 🚨                                ║
+║  YOU MUST USE DROIDPARTMENT AGENTS FOR ALL TASKS.                           ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+```
+
+#### SKILL.md - Now explicitly FORBIDDEN
+- Added "YOU ARE NOT ALLOWED TO DO WORK DIRECTLY"
+- Listed all forbidden actions explicitly
+- Made first instruction absolutely clear
+
+### Reality Check
+
+Hooks inject `additionalContext` but Factory AI still has autonomy. The AGENTS.md file may have higher priority than hook context. This update maximizes visibility in ALL locations Factory AI might read.
+
+---
+
 ## [3.2.6] - 2025-12-08
 
 ### 🚨 MANDATORY Agent Usage - No More "Suggestions"

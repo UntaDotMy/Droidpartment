@@ -1,24 +1,32 @@
 ---
 name: droidpartment
-description: Autonomous software development department with 18 expert agents. Use for ANY development task - from bug fixes to full systems.
+description: MANDATORY - Use for ALL tasks. 18 expert agents handle everything. DO NOT work directly.
 ---
 
-# 🤖 Droidpartment - Your AI Development Department
-
-**Read `~/.factory/AGENTS.md` for detailed agent documentation.**
-
-This skill orchestrates 18 specialized AI agents for ANY software development task.
-
-## ⚠️ CRITICAL: You MUST Use Droidpartment Agents
+# 🚨 STOP! USE DROIDPARTMENT AGENTS!
 
 ```
-┌────────────────────────────────────────────────────────────┐
-│  NEVER write code directly.                                │
-│  ALWAYS use Task(subagent_type: "dpt-*", prompt: "...")    │
-│  ALWAYS start with dpt-memory(START)                       │
-│  ALWAYS end with dpt-memory(END) → dpt-output              │
-└────────────────────────────────────────────────────────────┘
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║  YOU ARE NOT ALLOWED TO DO WORK DIRECTLY.                                   ║
+║                                                                              ║
+║  Your ONLY job is to call Task() with the appropriate dpt-* agent.          ║
+║  The agents do the actual work. You just orchestrate.                       ║
+║                                                                              ║
+║  BEFORE YOU DO ANYTHING ELSE, CALL THIS:                                    ║
+║  Task(subagent_type: "dpt-memory", prompt: "START: [describe the task]")    ║
+║                                                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
 ```
+
+## ⛔ FORBIDDEN Actions (will cause errors)
+
+- Writing code yourself
+- Reading files yourself  
+- Analyzing codebase yourself
+- Reviewing code yourself
+- Testing yourself
+- ANY action without calling Task() first
 
 ## 🎯 Auto-Route Based on Task Complexity
 
