@@ -1,0 +1,31 @@
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Development files
+HOOKS_INTEGRATION_PLAN.md
+HOOKS_IMPLEMENTATION_GUIDE.md
+PHASE_2_COMPLETION_REPORT.md
+NPM_READINESS_REPORT.md
+INTEGRATION_SUMMARY.md
+
+# Test files
+test.txt
+*.test.js
+
+# Git files
+.git/
+.gitignore
+.gitattributes
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db

@@ -118,7 +118,7 @@ function countYamlEntries(filePath) {
     if (!fs.existsSync(filePath)) return 0;
     try {
         const content = fs.readFileSync(filePath, 'utf8');
-        const matches = content.match(/^- id:/gm);
+        const matches = content.match(/- id:/gm);
         return matches ? matches.length : 0;
     } catch {
         return 0;
@@ -346,7 +346,7 @@ function isInstalled(targetDir) {
     return fs.existsSync(versionFile) || fs.existsSync(chiefFile);
 }
 
-function uninstall(targetDir) {
+async function uninstall(targetDir, autoYes = false, purgeMemory = false) {
     // Check if installed
     if (!isInstalled(targetDir)) {
         log.header('NOTHING TO UNINSTALL');
@@ -359,43 +359,188 @@ function uninstall(targetDir) {
     
     let totalRemoved = 0;
     
-    // Remove droids
+    // Remove ALL dpt-*.md files from droids directory (not hardcoded list)
     const droidsDir = path.join(targetDir, 'droids');
     if (fs.existsSync(droidsDir)) {
-        for (const droid of DROIDS) {
-            const droidFile = path.join(droidsDir, `${droid}.md`);
-            if (fs.existsSync(droidFile)) {
-                fs.unlinkSync(droidFile);
-                log.success(`Removed ${droid}.md`);
-                totalRemoved++;
-            }
+        const droidFiles = fs.readdirSync(droidsDir).filter(f => f.startsWith('dpt-') && f.endsWith('.md'));
+        for (const droidFile of droidFiles) {
+            const filePath = path.join(droidsDir, droidFile);
+            fs.unlinkSync(filePath);
+            log.success(`Removed ${droidFile}`);
+            totalRemoved++;
         }
+        // Remove droids directory if empty
+        try {
+            const remaining = fs.readdirSync(droidsDir);
+            if (remaining.length === 0) {
+                fs.rmdirSync(droidsDir);
+                log.success('Removed empty droids directory');
+            }
+        } catch (e) { /* ignore */ }
     }
     
-    // Remove skills
+    // Remove ALL droidpartment skills (scan directory)
     const skillsDir = path.join(targetDir, 'skills');
-    const skillsToRemove = ['bug-sweep', 'codebase-analysis', 'memory'];
+    const skillsToRemove = ['bug-sweep', 'codebase-analysis', 'memory', 'droidpartment'];
     for (const skill of skillsToRemove) {
         const skillDir = path.join(skillsDir, skill);
         if (fs.existsSync(skillDir)) {
             removeDir(skillDir);
-            fs.rmdirSync(skillDir);
+            try { fs.rmdirSync(skillDir); } catch (e) { /* ignore */ }
             log.success(`Removed skill: ${skill}`);
             totalRemoved++;
         }
     }
     
-    // Remove memory directory completely
+    // Remove hook registrations from Factory settings FIRST
+    const settingsPath = path.join(process.env.HOME || process.env.USERPROFILE, '.factory', 'settings.json');
+    try {
+        if (fs.existsSync(settingsPath)) {
+            let content = fs.readFileSync(settingsPath, 'utf8');
+            content = content.replace(/\/\/.*$/gm, '');
+            content = content.replace(/\/\*[\s\S]*?\*\//g, '');
+            const settings = JSON.parse(content);
+            
+            if (settings.hooks) {
+                delete settings.hooks.SessionStart;
+                delete settings.hooks.SubagentStop;
+                delete settings.hooks.PostToolUse;
+                delete settings.hooks.SessionEnd;
+                
+                if (Object.keys(settings.hooks).length === 0) {
+                    delete settings.hooks;
+                }
+                
+                fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+                log.success('Removed hook registrations from Factory settings');
+            }
+        }
+    } catch (e) {
+        log.warn('Could not remove hook registrations: ' + e.message);
+    }
+    
+    // Handle memory directory
     const memoryDir = path.join(targetDir, 'memory');
     if (fs.existsSync(memoryDir)) {
-        const memoryRemoved = removeDir(memoryDir);
-        totalRemoved += memoryRemoved;
-        try {
-            fs.rmdirSync(memoryDir);
-        } catch (e) {
-            // Directory might not be empty or already removed
+        // Count memory data (YAML files only - these are the learning data)
+        const lessonsFile = path.join(memoryDir, 'lessons.yaml');
+        const patternsFile = path.join(memoryDir, 'patterns.yaml');
+        const mistakesFile = path.join(memoryDir, 'mistakes.yaml');
+        const lessonsCount = countYamlEntries(lessonsFile);
+        const patternsCount = countYamlEntries(patternsFile);
+        const mistakesCount = countYamlEntries(mistakesFile);
+        const totalMemory = lessonsCount + patternsCount + mistakesCount;
+        
+        // Always remove: hooks/, *.py, *.json (these are code/state, not user data)
+        const hooksDir = path.join(memoryDir, 'hooks');
+        if (fs.existsSync(hooksDir)) {
+            const hooksRemoved = removeDir(hooksDir);
+            try { fs.rmdirSync(hooksDir); } catch (e) { /* ignore */ }
+            log.success(`Removed hooks (${hooksRemoved} files)`);
+            totalRemoved += hooksRemoved;
         }
-        log.success(`Removed memory system (${memoryRemoved} files)`);
+        
+        // Remove ALL .py files (Python modules)
+        const pyFiles = fs.readdirSync(memoryDir).filter(f => f.endsWith('.py'));
+        for (const pyFile of pyFiles) {
+            fs.unlinkSync(path.join(memoryDir, pyFile));
+            totalRemoved++;
+        }
+        if (pyFiles.length > 0) {
+            log.success(`Removed ${pyFiles.length} Python modules`);
+        }
+        
+        // Remove ALL .json files (state files, not user data)
+        const jsonFiles = fs.readdirSync(memoryDir).filter(f => f.endsWith('.json'));
+        for (const jsonFile of jsonFiles) {
+            fs.unlinkSync(path.join(memoryDir, jsonFile));
+            totalRemoved++;
+        }
+        if (jsonFiles.length > 0) {
+            log.success(`Removed ${jsonFiles.length} state files`);
+        }
+        
+        // Remove __pycache__ if exists
+        const pycacheDir = path.join(memoryDir, '__pycache__');
+        if (fs.existsSync(pycacheDir)) {
+            removeDir(pycacheDir);
+            try { fs.rmdirSync(pycacheDir); } catch (e) { /* ignore */ }
+            log.success('Removed __pycache__');
+        }
+        
+        // Handle YAML memory files (user learning data)
+        if (totalMemory > 0) {
+            log.warn(`Memory found: ${lessonsCount} lessons, ${patternsCount} patterns, ${mistakesCount} mistakes`);
+            
+            let deleteMemory = purgeMemory;
+            
+            if (!autoYes && !purgeMemory) {
+                console.log('');
+                console.log(`${COLORS.cyan}Preserve Memory Data?${COLORS.reset}`);
+                console.log('');
+                console.log(`  ${COLORS.green}1${COLORS.reset}) Keep memory (default)`);
+                console.log('     Your learning is preserved for next reinstall');
+                console.log('');
+                console.log(`  ${COLORS.red}2${COLORS.reset}) Delete memory`);
+                console.log('     Clean slate on next install');
+                console.log('');
+                
+                const choice = await prompt('Select option [1/2]', '1');
+                deleteMemory = choice === '2';
+            }
+            
+            if (deleteMemory) {
+                // Delete YAML memory files
+                if (fs.existsSync(lessonsFile)) fs.unlinkSync(lessonsFile);
+                if (fs.existsSync(patternsFile)) fs.unlinkSync(patternsFile);
+                if (fs.existsSync(mistakesFile)) fs.unlinkSync(mistakesFile);
+                const statsFile = path.join(memoryDir, 'stats.yaml');
+                if (fs.existsSync(statsFile)) fs.unlinkSync(statsFile);
+                
+                // Remove projects directory
+                const projectsDir = path.join(memoryDir, 'projects');
+                if (fs.existsSync(projectsDir)) {
+                    removeDir(projectsDir);
+                    try { fs.rmdirSync(projectsDir); } catch (e) { /* ignore */ }
+                }
+                
+                log.success(`Deleted memory (${lessonsCount} lessons, ${patternsCount} patterns, ${mistakesCount} mistakes)`);
+                totalRemoved += 4;
+                
+                // Try to remove memory directory if empty
+                try {
+                    const remaining = fs.readdirSync(memoryDir);
+                    if (remaining.length === 0) {
+                        fs.rmdirSync(memoryDir);
+                        log.success('Removed empty memory directory');
+                    }
+                } catch (e) { /* ignore */ }
+            } else {
+                // Preserve memory YAML files
+                log.success(`Preserved memory (${lessonsCount} lessons, ${patternsCount} patterns, ${mistakesCount} mistakes)`);
+                log.info('Memory will be available on next install');
+            }
+        } else {
+            // No learning data - remove remaining files and directory
+            const statsFile = path.join(memoryDir, 'stats.yaml');
+            if (fs.existsSync(statsFile)) fs.unlinkSync(statsFile);
+            
+            // Remove projects directory if exists
+            const projectsDir = path.join(memoryDir, 'projects');
+            if (fs.existsSync(projectsDir)) {
+                removeDir(projectsDir);
+                try { fs.rmdirSync(projectsDir); } catch (e) { /* ignore */ }
+            }
+            
+            // Try to remove memory directory if empty
+            try {
+                const remaining = fs.readdirSync(memoryDir);
+                if (remaining.length === 0) {
+                    fs.rmdirSync(memoryDir);
+                    log.success('Removed empty memory directory');
+                }
+            } catch (e) { /* ignore */ }
+        }
     }
     
     // Remove AGENTS.md
@@ -450,8 +595,39 @@ function update(targetDir, installedVersion) {
         log.success('Updated AGENTS.md orchestrator');
     }
     
-    // NOTE: We don't update memory files to preserve learned data!
-    log.info('Memory files preserved (learning data kept)');
+    // Update hooks (always update)
+    log.header('UPDATING HOOKS');
+    const hooksSource = path.join(TEMPLATES_DIR, 'hooks');
+    const memoryTarget = path.join(targetDir, 'memory');
+    const hooksTarget = path.join(memoryTarget, 'hooks');
+    if (fs.existsSync(hooksSource)) {
+        ensureDir(hooksTarget);
+        const hooksCopied = copyDir(hooksSource, hooksTarget);
+        log.success(`Updated ${hooksCopied} hooks`);
+        
+        // Re-register hooks in Factory settings
+        registerHooks(hooksTarget);
+    }
+    
+    // Update Python modules (always update - these don't contain user data)
+    log.header('UPDATING PYTHON MODULES');
+    const memorySource = path.join(TEMPLATES_DIR, 'memory');
+    const pythonModules = ['context_index.py', 'workflow_state.py', 'shared_context.py'];
+    let modulesUpdated = 0;
+    for (const module of pythonModules) {
+        const srcPath = path.join(memorySource, module);
+        const destPath = path.join(memoryTarget, module);
+        if (fs.existsSync(srcPath)) {
+            fs.copyFileSync(srcPath, destPath);
+            modulesUpdated++;
+        }
+    }
+    if (modulesUpdated > 0) {
+        log.success(`Updated ${modulesUpdated} Python modules`);
+    }
+    
+    // NOTE: We don't update memory YAML files to preserve learned data!
+    log.info('Memory data preserved (lessons, patterns, mistakes kept)');
     
     // Save new version
     saveVersion(targetDir, CURRENT_VERSION);
@@ -460,6 +636,55 @@ function update(targetDir, installedVersion) {
     console.log(`${COLORS.bright}Updated to:${COLORS.reset} v${CURRENT_VERSION}`);
     console.log('');
     log.info('Restart droid CLI to apply changes.');
+}
+
+function registerHooks(hooksTarget) {
+    const settingsDir = path.join(process.env.HOME || process.env.USERPROFILE, '.factory');
+    const settingsPath = path.join(settingsDir, 'settings.json');
+    ensureDir(settingsDir);
+
+    let settings = {};
+    try {
+        if (fs.existsSync(settingsPath)) {
+            let content = fs.readFileSync(settingsPath, 'utf8');
+            content = content.replace(/\/\/.*$/gm, '');
+            content = content.replace(/\/\*[\s\S]*?\*\//g, '');
+            settings = JSON.parse(content);
+        }
+    } catch (e) {
+        settings = {};
+    }
+
+    if (!settings.hooks) {
+        settings.hooks = {};
+    }
+
+    const hooksPathForward = hooksTarget.replace(/\\/g, '/');
+    const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
+
+    settings.hooks.SessionStart = [{
+        "matcher": "*",
+        "hooks": [{"type": "command", "command": `${pythonCmd} ${hooksPathForward}/hook-session-start.py`}]
+    }];
+    settings.hooks.SubagentStop = [{
+        "matcher": "*",
+        "hooks": [{"type": "command", "command": `${pythonCmd} ${hooksPathForward}/hook-subagent-stop.py`}]
+    }];
+    settings.hooks.PostToolUse = [{
+        "matcher": "*",
+        "hooks": [{"type": "command", "command": `${pythonCmd} ${hooksPathForward}/hook-post-tool-use.py`}]
+    }];
+    settings.hooks.SessionEnd = [{
+        "matcher": "*",
+        "hooks": [{"type": "command", "command": `${pythonCmd} ${hooksPathForward}/hook-session-end.py`}]
+    }];
+
+    try {
+        fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+        log.success('Hooks registered in Factory settings');
+    } catch (e) {
+        log.warn('Could not register hooks: ' + e.message);
+    }
 }
 
 async function prompt(question, defaultValue = '') {
@@ -525,6 +750,76 @@ function install(targetDir) {
         log.success(`Installed global memory (${memoryCopied} files)`);
         log.info('Global: lessons.yaml, patterns.yaml, mistakes.yaml (shared across all projects)');
         log.info('Per-project: memory/projects/{project}/ (auto-created when needed)');
+    }
+    
+    // Copy hooks
+    log.header('INSTALLING FACTORY HOOKS');
+    const hooksSource = path.join(TEMPLATES_DIR, 'hooks');
+    const hooksTarget = path.join(memoryTarget, 'hooks');
+    if (fs.existsSync(hooksSource)) {
+        ensureDir(hooksTarget);
+        const hooksCopied = copyDir(hooksSource, hooksTarget);
+        log.success(`Installed ${hooksCopied} Factory hooks`);
+        log.info('Hooks enable automatic:');
+        log.info('  ✓ Memory initialization (SessionStart)');
+        log.info('  ✓ Context transfer between agents (SubagentStop)');
+        log.info('  ✓ Progress tracking (PostToolUse)');
+        log.info('  ✓ Session cleanup (SessionEnd)');
+    }
+    
+    // Register hooks in Factory settings (handles JSONC format)
+    const settingsDir = path.join(process.env.HOME || process.env.USERPROFILE, '.factory');
+    const settingsPath = path.join(settingsDir, 'settings.json');
+    ensureDir(settingsDir);
+
+    let settings = {};
+    try {
+        if (fs.existsSync(settingsPath)) {
+            // Read and strip JSONC comments (// and /* */)
+            let content = fs.readFileSync(settingsPath, 'utf8');
+            content = content.replace(/\/\/.*$/gm, ''); // Remove // comments
+            content = content.replace(/\/\*[\s\S]*?\*\//g, ''); // Remove /* */ comments
+            settings = JSON.parse(content);
+        }
+    } catch (e) {
+        log.warn('Could not parse settings.json, creating fresh hooks config');
+        settings = {};
+    }
+
+    if (!settings.hooks) {
+        settings.hooks = {};
+    }
+
+    // Use forward slashes for cross-platform compatibility
+    const hooksPathForward = hooksTarget.replace(/\\/g, '/');
+    
+    // Detect Python command (python on Windows, python3 on Unix)
+    const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
+
+    // Register 4 hooks with proper paths
+    settings.hooks.SessionStart = [{
+        "matcher": "*",
+        "hooks": [{"type": "command", "command": `${pythonCmd} ${hooksPathForward}/hook-session-start.py`}]
+    }];
+    settings.hooks.SubagentStop = [{
+        "matcher": "*",
+        "hooks": [{"type": "command", "command": `${pythonCmd} ${hooksPathForward}/hook-subagent-stop.py`}]
+    }];
+    settings.hooks.PostToolUse = [{
+        "matcher": "*",
+        "hooks": [{"type": "command", "command": `${pythonCmd} ${hooksPathForward}/hook-post-tool-use.py`}]
+    }];
+    settings.hooks.SessionEnd = [{
+        "matcher": "*",
+        "hooks": [{"type": "command", "command": `${pythonCmd} ${hooksPathForward}/hook-session-end.py`}]
+    }];
+
+    try {
+        fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+        log.success('Hooks registered in Factory settings');
+        log.info(`  Using: ${pythonCmd} with forward-slash paths`);
+    } catch (e) {
+        log.warn('Could not register hooks: ' + e.message);
     }
     
     // Copy AGENTS.md
@@ -611,7 +906,9 @@ ${COLORS.bright}OPTIONS:${COLORS.reset}
   ${COLORS.green}(no args)${COLORS.reset}       Install or update Droidpartment
   ${COLORS.yellow}--memory, -m${COLORS.reset}    Manage/clean memory files
   ${COLORS.red}--uninstall, -u${COLORS.reset} Remove Droidpartment
+  ${COLORS.cyan}--check${COLORS.reset}         Verify installation status without changes
   ${COLORS.cyan}--yes, -y${COLORS.reset}       Auto-confirm prompts (for CI/scripts)
+  ${COLORS.cyan}--purge-memory${COLORS.reset}   Delete memory during uninstall (default: preserve)
   ${COLORS.cyan}--project${COLORS.reset}       Force project-level install (.factory/)
   ${COLORS.cyan}--update${COLORS.reset}        Force update even if same version
   ${COLORS.cyan}--version, -v${COLORS.reset}   Show version number
@@ -620,19 +917,92 @@ ${COLORS.bright}OPTIONS:${COLORS.reset}
 ${COLORS.bright}EXAMPLES:${COLORS.reset}
   npx droidpartment              # Interactive install
   npx droidpartment -y           # Auto-install to personal dir
+  npx droidpartment --check      # Check installation status
   npx droidpartment --memory     # Manage memory files
-  npx droidpartment -u -y        # Auto-uninstall
+  npx droidpartment -u -y        # Auto-uninstall (preserves memory)
+  npx droidpartment -u -y --purge-memory  # Uninstall and delete memory
 
 ${COLORS.bright}LEARN MORE:${COLORS.reset}
   https://github.com/UntaDotMy/Droidpartment
 `);
 }
 
+function checkInstallation() {
+    log.header('INSTALLATION CHECK');
+    
+    const personalInstalled = getInstalledVersion(PERSONAL_DIR);
+    const projectInstalled = getInstalledVersion(PROJECT_DIR);
+    
+    console.log(`${COLORS.bright}Personal (~/.factory):${COLORS.reset}`);
+    if (personalInstalled) {
+        log.success(`Installed v${personalInstalled}`);
+        
+        // Check components
+        const droidsDir = path.join(PERSONAL_DIR, 'droids');
+        const memoryDir = path.join(PERSONAL_DIR, 'memory');
+        const hooksDir = path.join(memoryDir, 'hooks');
+        const agentsMd = path.join(PERSONAL_DIR, 'AGENTS.md');
+        
+        const droidsCount = fs.existsSync(droidsDir) ? fs.readdirSync(droidsDir).filter(f => f.endsWith('.md')).length : 0;
+        const hooksCount = fs.existsSync(hooksDir) ? fs.readdirSync(hooksDir).filter(f => f.endsWith('.py')).length : 0;
+        const hasAgentsMd = fs.existsSync(agentsMd);
+        const hasMemory = fs.existsSync(memoryDir);
+        
+        console.log(`  Agents: ${droidsCount}/18`);
+        console.log(`  Hooks: ${hooksCount}/4`);
+        console.log(`  AGENTS.md: ${hasAgentsMd ? 'yes' : 'missing'}`);
+        console.log(`  Memory: ${hasMemory ? 'yes' : 'not initialized'}`);
+        
+        // Check memory stats
+        if (hasMemory) {
+            const lessonsCount = countYamlEntries(path.join(memoryDir, 'lessons.yaml'));
+            const patternsCount = countYamlEntries(path.join(memoryDir, 'patterns.yaml'));
+            const mistakesCount = countYamlEntries(path.join(memoryDir, 'mistakes.yaml'));
+            console.log(`  Learning: ${lessonsCount} lessons, ${patternsCount} patterns, ${mistakesCount} mistakes`);
+        }
+        
+        // Check if update available
+        if (compareVersions(CURRENT_VERSION, personalInstalled) > 0) {
+            log.warn(`Update available: v${CURRENT_VERSION}`);
+        }
+    } else {
+        log.info('Not installed');
+    }
+    
+    console.log('');
+    console.log(`${COLORS.bright}Project (./.factory):${COLORS.reset}`);
+    if (projectInstalled) {
+        log.success(`Installed v${projectInstalled}`);
+    } else {
+        log.info('Not installed');
+    }
+    
+    console.log('');
+    console.log(`${COLORS.bright}Available Version:${COLORS.reset} v${CURRENT_VERSION}`);
+    
+    // Check Factory settings
+    const settingsPath = path.join(PERSONAL_DIR, 'settings.json');
+    if (fs.existsSync(settingsPath)) {
+        try {
+            let content = fs.readFileSync(settingsPath, 'utf8');
+            content = content.replace(/\/\/.*$/gm, '');
+            content = content.replace(/\/\*[\s\S]*?\*\//g, '');
+            const settings = JSON.parse(content);
+            const hooksRegistered = settings.hooks && settings.hooks.SessionStart ? 'yes' : 'no';
+            console.log(`${COLORS.bright}Hooks Registered:${COLORS.reset} ${hooksRegistered}`);
+        } catch {
+            console.log(`${COLORS.bright}Hooks Registered:${COLORS.reset} unknown`);
+        }
+    }
+}
+
 async function main() {
     const args = process.argv.slice(2);
     const isUninstall = args.includes('--uninstall') || args.includes('-u');
     const isMemory = args.includes('--memory') || args.includes('-m');
+    const isCheck = args.includes('--check');
     const autoYes = args.includes('--yes') || args.includes('-y');
+    const purgeMemory = args.includes('--purge-memory');
     const forceProject = args.includes('--project');
     const forceUpdate = args.includes('--update');
     const showVersion = args.includes('--version') || args.includes('-v');
@@ -651,6 +1021,12 @@ async function main() {
     }
     
     showBanner();
+    
+    // Handle --check
+    if (isCheck) {
+        checkInstallation();
+        return;
+    }
     
     // Handle memory management
     if (isMemory) {
@@ -695,8 +1071,8 @@ async function main() {
             console.log('');
             const choice = await prompt('Which to uninstall? [1/2/3]', '1');
             if (choice === '3') {
-                uninstall(PERSONAL_DIR);
-                uninstall(PROJECT_DIR);
+                await uninstall(PERSONAL_DIR, autoYes, purgeMemory);
+                await uninstall(PROJECT_DIR, autoYes, purgeMemory);
                 return;
             }
             targetDir = choice === '2' ? PROJECT_DIR : PERSONAL_DIR;
@@ -705,7 +1081,7 @@ async function main() {
             targetDir = personalInstalled ? PERSONAL_DIR : PROJECT_DIR;
             log.info(`Found installation in: ${targetDir}`);
         }
-        uninstall(targetDir);
+        await uninstall(targetDir, autoYes, purgeMemory);
         return;
     }
     
@@ -750,7 +1126,7 @@ async function main() {
                     targetDir = installedDir;
                     action = 'update';
                 } else if (choice === '2') {
-                    uninstall(installedDir);
+                    await uninstall(installedDir, autoYes, purgeMemory);
                     targetDir = installedDir;
                     action = 'install';
                 } else {
@@ -763,7 +1139,12 @@ async function main() {
             log.success('Already up to date!');
             console.log('');
             
-            if (!autoYes) {
+            if (forceUpdate) {
+                // Force refresh even with same version
+                log.info('Force update requested - refreshing files...');
+                targetDir = installedDir;
+                action = 'update';
+            } else if (!autoYes) {
                 console.log('What would you like to do?');
                 console.log('');
                 console.log(`  ${COLORS.green}1${COLORS.reset}) Exit (already installed)`);
@@ -776,7 +1157,7 @@ async function main() {
                     targetDir = installedDir;
                     action = 'update';
                 } else if (choice === '3') {
-                    uninstall(installedDir);
+                    await uninstall(installedDir, autoYes, purgeMemory);
                     return;
                 } else {
                     log.info('No changes made.');
