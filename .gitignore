@@ -21,3 +21,13 @@ coverage/
 # Build artifacts
 dist/
 build/
+
+# Python cache
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# npm package
+*.tgz
