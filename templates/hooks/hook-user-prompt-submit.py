@@ -30,6 +30,23 @@ from datetime import datetime
 memory_dir = Path(os.path.expanduser('~/.factory/memory'))
 sys.path.insert(0, str(memory_dir))
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# PERFORMANCE OPTIMIZATION: Singleton cache for expensive objects
+# ═══════════════════════════════════════════════════════════════════════════════
+_cache = {
+    'context_index': None
+}
+
+def get_context_index():
+    """Get cached ContextIndex singleton."""
+    if _cache['context_index'] is None:
+        try:
+            from context_index import ContextIndex
+            _cache['context_index'] = ContextIndex()
+        except:
+            pass
+    return _cache['context_index']
+
 
 def _parse_yaml_lessons(content: str) -> list:
     """Parse YAML lessons manually (no deps)."""
@@ -62,21 +79,21 @@ def load_relevant_lessons(prompt: str, max_lessons: int = 3, cwd: str = None) ->
     try:
         # 1. Load PROJECT-SPECIFIC lessons first (more relevant)
         if cwd:
-            try:
-                from context_index import ContextIndex
-                ctx = ContextIndex()
-                project_memory_dir = ctx.get_project_memory_dir(cwd)
-                project_lessons_file = project_memory_dir / 'lessons.yaml'
-                
-                if project_lessons_file.exists():
-                    content = project_lessons_file.read_text()
-                    project_lessons = _parse_yaml_lessons(content)
-                    # Mark as project-specific for higher priority
-                    for l in project_lessons:
-                        l['_source'] = 'project'
-                    all_lessons.extend(project_lessons)
-            except:
-                pass
+            ctx = get_context_index()
+            if ctx:
+                try:
+                    project_memory_dir = ctx.get_project_memory_dir(cwd)
+                    project_lessons_file = project_memory_dir / 'lessons.yaml'
+                    
+                    if project_lessons_file.exists():
+                        content = project_lessons_file.read_text()
+                        project_lessons = _parse_yaml_lessons(content)
+                        # Mark as project-specific for higher priority
+                        for l in project_lessons:
+                            l['_source'] = 'project'
+                        all_lessons.extend(project_lessons)
+                except:
+                    pass
         
         # 2. Load GLOBAL lessons
         global_lessons_file = memory_dir / 'lessons.yaml'
@@ -145,20 +162,20 @@ def load_relevant_mistakes(prompt: str, max_mistakes: int = 2, cwd: str = None) 
     try:
         # 1. Load PROJECT-SPECIFIC mistakes first
         if cwd:
-            try:
-                from context_index import ContextIndex
-                ctx = ContextIndex()
-                project_memory_dir = ctx.get_project_memory_dir(cwd)
-                project_mistakes_file = project_memory_dir / 'mistakes.yaml'
-                
-                if project_mistakes_file.exists():
-                    content = project_mistakes_file.read_text()
-                    project_mistakes = _parse_yaml_mistakes(content)
-                    for m in project_mistakes:
-                        m['_source'] = 'project'
-                    all_mistakes.extend(project_mistakes)
-            except:
-                pass
+            ctx = get_context_index()
+            if ctx:
+                try:
+                    project_memory_dir = ctx.get_project_memory_dir(cwd)
+                    project_mistakes_file = project_memory_dir / 'mistakes.yaml'
+                    
+                    if project_mistakes_file.exists():
+                        content = project_mistakes_file.read_text()
+                        project_mistakes = _parse_yaml_mistakes(content)
+                        for m in project_mistakes:
+                            m['_source'] = 'project'
+                        all_mistakes.extend(project_mistakes)
+                except:
+                    pass
         
         # 2. Load GLOBAL mistakes
         global_mistakes_file = memory_dir / 'mistakes.yaml'
@@ -208,14 +225,13 @@ def get_workflow_context() -> str:
 
 
 def get_project_context() -> str:
-    """Get current project context."""
-    try:
-        from context_index import ContextIndex
-        ci = ContextIndex()
-        return ci.get_project_summary()
-    except:
-        pass
-    
+    """Get current project context (uses cache)."""
+    ci = get_context_index()
+    if ci:
+        try:
+            return ci.get_project_summary()
+        except:
+            pass
     return ""
 
 

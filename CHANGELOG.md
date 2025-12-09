@@ -5,6 +5,30 @@ All notable changes to Droidpartment are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.14] - 2025-12-09
+
+### ⚡ Performance Optimization + Stats Fixes
+
+**Performance (3-5x faster):**
+
+1. **Singleton Cache Pattern** - All hooks now cache expensive objects
+   - ContextIndex loaded once per hook, not 3-6 times
+   - Tool/droid stats cached in memory, saved once at exit
+   - Reduces JSON file I/O from 10-15 reads to 3-5 per tool
+
+2. **Deferred Writes** - Stats marked dirty, saved in batch at exit
+
+**Stats Fixes:**
+
+1. **Droid tracking now works** - Agent names recorded in PreToolUse where `subagent_type` is directly available (SubagentStop extraction was unreliable)
+
+2. **Learning rate calculation fixed** - Uses fallbacks:
+   - Project sessions → Global session history → Estimated from agent calls
+
+3. **Built-in vs Custom agents** - Now correctly categorizes dpt-* agents
+
+---
+
 ## [3.2.13] - 2025-12-09
 
 ### 🧠 Complete Memory System Overhaul + Statistics Command

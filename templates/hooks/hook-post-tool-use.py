@@ -26,28 +26,80 @@ from datetime import datetime
 memory_dir = Path(os.path.expanduser('~/.factory/memory'))
 sys.path.insert(0, str(memory_dir))
 
-def log_tool_usage(tool_name, tool_response):
-    """Log tool usage for statistics."""
-    try:
+# ═══════════════════════════════════════════════════════════════════════════════
+# PERFORMANCE OPTIMIZATION: Singleton cache for expensive objects
+# ═══════════════════════════════════════════════════════════════════════════════
+_cache = {
+    'context_index': None,
+    'tool_stats': None,
+    'tool_stats_dirty': False,
+    'errors': None,
+    'errors_dirty': False,
+    'files_modified': None,
+    'files_dirty': False
+}
+
+def get_context_index():
+    """Get cached ContextIndex singleton."""
+    if _cache['context_index'] is None:
+        try:
+            from context_index import ContextIndex
+            _cache['context_index'] = ContextIndex()
+        except:
+            pass
+    return _cache['context_index']
+
+def get_tool_stats():
+    """Get cached tool stats."""
+    if _cache['tool_stats'] is None:
         stats_file = memory_dir / 'tool_stats.json'
+        try:
+            if stats_file.exists():
+                with open(stats_file, 'r') as f:
+                    _cache['tool_stats'] = json.load(f)
+            else:
+                _cache['tool_stats'] = {'tools': {}, 'total_executions': 0, 'errors': 0}
+        except:
+            _cache['tool_stats'] = {'tools': {}, 'total_executions': 0, 'errors': 0}
+    return _cache['tool_stats']
+
+def save_all_caches():
+    """Save all dirty caches before exit."""
+    if _cache['tool_stats_dirty'] and _cache['tool_stats']:
+        try:
+            with open(memory_dir / 'tool_stats.json', 'w') as f:
+                json.dump(_cache['tool_stats'], f, indent=2)
+        except:
+            pass
+    if _cache['errors_dirty'] and _cache['errors']:
+        try:
+            with open(memory_dir / 'errors.json', 'w') as f:
+                json.dump(_cache['errors'], f, indent=2)
+        except:
+            pass
+    if _cache['files_dirty'] and _cache['files_modified']:
+        try:
+            with open(memory_dir / 'files_modified.json', 'w') as f:
+                json.dump(_cache['files_modified'], f, indent=2)
+        except:
+            pass
+
+def log_tool_usage(tool_name, tool_response):
+    """Log tool usage for statistics (uses cache)."""
+    try:
+        stats = get_tool_stats()
         
-        if stats_file.exists():
-            with open(stats_file, 'r') as f:
-                stats = json.load(f)
-        else:
-            stats = {'tools': {}, 'total_executions': 0, 'errors': 0}
-        
+        if 'tools' not in stats:
+            stats['tools'] = {}
         if tool_name not in stats['tools']:
             stats['tools'][tool_name] = {'count': 0, 'errors': 0}
         
         stats['tools'][tool_name]['count'] += 1
-        stats['total_executions'] += 1
+        stats['total_executions'] = stats.get('total_executions', 0) + 1
         stats['last_tool'] = tool_name
         stats['last_execution'] = datetime.now().isoformat()
         
-        with open(stats_file, 'w') as f:
-            json.dump(stats, f, indent=2)
-        
+        _cache['tool_stats_dirty'] = True
         return True
     except:
         return False
@@ -150,21 +202,21 @@ def record_error_to_knowledge(error_info):
         except:
             pass
         
-        # Record as mistake to project memory for learning
-        try:
-            from context_index import ContextIndex
-            ci = ContextIndex()
-            current_project = ci.index.get('current_project')
-            if current_project:
-                ci.record_mistake(current_project, {
-                    'agent': 'tool_use',
-                    'description': f"Tool {tool_name} error: {error_type}",
-                    'context': error_info.get('file_path', '') or error_info.get('command', ''),
-                    'prevention': f"Check {error_type} before using {tool_name}",
-                    'severity': 'medium'
-                })
-        except:
-            pass
+        # Record as mistake to project memory for learning (use cached ctx)
+        ci = get_context_index()
+        if ci:
+            try:
+                current_project = ci.index.get('current_project')
+                if current_project:
+                    ci.record_mistake(current_project, {
+                        'agent': 'tool_use',
+                        'description': f"Tool {tool_name} error: {error_type}",
+                        'context': error_info.get('file_path', '') or error_info.get('command', ''),
+                        'prevention': f"Check {error_type} before using {tool_name}",
+                        'severity': 'medium'
+                    })
+            except:
+                pass
         
         return True
     except:
@@ -212,17 +264,16 @@ def track_file_modification(tool_name, tool_input, tool_response):
         with open(files_file, 'w') as f:
             json.dump(files, f, indent=2)
         
-        # Update context index AND project tree using new method
-        try:
-            from context_index import ContextIndex
-            ci = ContextIndex()
-            
-            current_project = ci.index.get('current_project')
-            if current_project:
-                # Use new update_on_file_change method (updates tree + files.json)
-                ci.update_on_file_change(current_project, file_path, action)
-        except:
-            pass
+        # Update context index AND project tree using new method (use cached ctx)
+        ci = get_context_index()
+        if ci:
+            try:
+                current_project = ci.index.get('current_project')
+                if current_project:
+                    # Use new update_on_file_change method (updates tree + files.json)
+                    ci.update_on_file_change(current_project, file_path, action)
+            except:
+                pass
         
         # Update shared context
         try:
@@ -260,17 +311,17 @@ def track_file_deletion(tool_name, tool_input, tool_response, cwd: str = None):
         # This is best-effort
         response_str = str(tool_response) if tool_response else ''
         if 'error' not in response_str.lower():
-            # Update project tree - use cwd directly
-            try:
-                from context_index import ContextIndex
-                ci = ContextIndex()
-                project_path = cwd or ci.index.get('current_project')
-                if project_path:
-                    # Flag that a deletion occurred for re-indexing
-                    ci.index['needs_reindex'] = True
-                    ci._save_index()
-            except:
-                pass
+            # Update project tree - use cwd directly (use cached ctx)
+            ci = get_context_index()
+            if ci:
+                try:
+                    project_path = cwd or ci.index.get('current_project')
+                    if project_path:
+                        # Flag that a deletion occurred for re-indexing
+                        ci.index['needs_reindex'] = True
+                        ci._save_index()
+                except:
+                    pass
     except:
         pass
 
@@ -326,12 +377,15 @@ def main():
         # Update progress
         update_session_progress()
         
-        # Exit 0 = success, no blocking
+        # Save all cached data before exit
+        save_all_caches()
         sys.exit(0)
         
     except json.JSONDecodeError:
+        save_all_caches()
         sys.exit(0)
     except Exception as e:
+        save_all_caches()
         sys.exit(0)
 
 if __name__ == '__main__':

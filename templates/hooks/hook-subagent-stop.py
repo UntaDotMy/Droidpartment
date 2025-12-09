@@ -26,6 +26,70 @@ from datetime import datetime
 memory_dir = Path(os.path.expanduser('~/.factory/memory'))
 sys.path.insert(0, str(memory_dir))
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# PERFORMANCE OPTIMIZATION: Singleton cache for expensive objects
+# ═══════════════════════════════════════════════════════════════════════════════
+_cache = {
+    'context_index': None,
+    'droid_stats': None,
+    'droid_stats_dirty': False,
+    'session_state': None,
+    'session_dirty': False
+}
+
+def get_context_index():
+    """Get cached ContextIndex singleton."""
+    if _cache['context_index'] is None:
+        try:
+            from context_index import ContextIndex
+            _cache['context_index'] = ContextIndex()
+        except:
+            pass
+    return _cache['context_index']
+
+def get_droid_stats():
+    """Get cached droid stats."""
+    if _cache['droid_stats'] is None:
+        stats_file = memory_dir / 'droid_usage.json'
+        try:
+            if stats_file.exists():
+                with open(stats_file, 'r') as f:
+                    _cache['droid_stats'] = json.load(f)
+            else:
+                _cache['droid_stats'] = {'total_calls': 0, 'droids': {}, 'sessions': []}
+        except:
+            _cache['droid_stats'] = {'total_calls': 0, 'droids': {}, 'sessions': []}
+    return _cache['droid_stats']
+
+def get_session_state():
+    """Get cached session state."""
+    if _cache['session_state'] is None:
+        session_file = memory_dir / 'session_state.json'
+        try:
+            if session_file.exists():
+                with open(session_file, 'r') as f:
+                    _cache['session_state'] = json.load(f)
+            else:
+                _cache['session_state'] = {'agents_run': [], 'droid_stats': {}, 'workflow_tracking': {}}
+        except:
+            _cache['session_state'] = {'agents_run': [], 'droid_stats': {}, 'workflow_tracking': {}}
+    return _cache['session_state']
+
+def save_all_caches():
+    """Save all dirty caches before exit."""
+    if _cache['droid_stats_dirty'] and _cache['droid_stats']:
+        try:
+            with open(memory_dir / 'droid_usage.json', 'w') as f:
+                json.dump(_cache['droid_stats'], f, indent=2)
+        except:
+            pass
+    if _cache['session_dirty'] and _cache['session_state']:
+        try:
+            with open(memory_dir / 'session_state.json', 'w') as f:
+                json.dump(_cache['session_state'], f, indent=2)
+        except:
+            pass
+
 def extract_agent_from_transcript(transcript_path):
     """Try to extract droid name from transcript."""
     if not transcript_path:
@@ -137,40 +201,27 @@ def update_workflow_state(agent):
         return None
 
 def update_droid_stats(agent):
-    """Update droid usage statistics."""
+    """Update droid usage statistics (uses cache)."""
     try:
-        stats_file = memory_dir / 'droid_usage.json'
-        
-        if stats_file.exists():
-            with open(stats_file, 'r') as f:
-                stats = json.load(f)
-        else:
-            stats = {'total_calls': 0, 'droids': {}, 'sessions': []}
-        
-        stats['total_calls'] += 1
+        stats = get_droid_stats()
+        stats['total_calls'] = stats.get('total_calls', 0) + 1
         stats['last_call'] = datetime.now().isoformat()
         
         if agent:
+            if 'droids' not in stats:
+                stats['droids'] = {}
             if agent not in stats['droids']:
                 stats['droids'][agent] = 0
             stats['droids'][agent] += 1
         
-        with open(stats_file, 'w') as f:
-            json.dump(stats, f, indent=2)
-            
+        _cache['droid_stats_dirty'] = True
     except:
         pass
 
 def update_session_state(agent):
-    """Update session state with agent completion."""
+    """Update session state with agent completion (uses cache)."""
     try:
-        session_file = memory_dir / 'session_state.json'
-        
-        if session_file.exists():
-            with open(session_file, 'r') as f:
-                state = json.load(f)
-        else:
-            state = {'agents_run': [], 'droid_stats': {}, 'workflow_tracking': {}}
+        state = get_session_state()
         
         if 'agents_run' not in state:
             state['agents_run'] = []
@@ -206,9 +257,7 @@ def update_session_state(agent):
             elif agent == 'dpt-output':
                 state['workflow_tracking']['output_called'] = True
         
-        with open(session_file, 'w') as f:
-            json.dump(state, f, indent=2)
-            
+        _cache['session_dirty'] = True
     except:
         pass
 
@@ -254,57 +303,52 @@ def record_agent_mistakes(mistakes):
 
 def record_agent_mistakes_to_project(cwd: str, mistakes):
     """
-    Record extracted mistakes to PROJECT-SPECIFIC memory.
+    Record extracted mistakes to PROJECT-SPECIFIC memory (uses cache).
     Uses cwd directly instead of relying on current_project in index.
     """
     if not mistakes:
         return
     
-    try:
-        from context_index import ContextIndex
-        ci = ContextIndex()
-        
-        for mistake in mistakes:
-            mistake['prevention'] = f"Review before completing: {mistake.get('description', '')[:50]}"
-            ci.record_mistake(cwd, mistake)
-    except:
-        pass
+    ci = get_context_index()
+    if ci:
+        try:
+            for mistake in mistakes:
+                mistake['prevention'] = f"Review before completing: {mistake.get('description', '')[:50]}"
+                ci.record_mistake(cwd, mistake)
+        except:
+            pass
 
 def refresh_project_index_if_needed(cwd: str = None):
     """
-    Refresh project index if files were changed during agent run.
+    Refresh project index if files were changed during agent run (uses cache).
     Uses cwd directly instead of relying on current_project in index.
     """
-    try:
-        from context_index import ContextIndex
-        ci = ContextIndex()
-        
-        # Check if re-index is needed
-        if ci.index.get('needs_reindex'):
-            project_path = cwd or ci.index.get('current_project')
-            if project_path:
-                # Re-initialize project memory
-                ci.initialize_project_memory(project_path)
-                ci.index['needs_reindex'] = False
-                ci._save_index()
-    except:
-        pass
+    ci = get_context_index()
+    if ci:
+        try:
+            # Check if re-index is needed
+            if ci.index.get('needs_reindex'):
+                project_path = cwd or ci.index.get('current_project')
+                if project_path:
+                    # Re-initialize project memory
+                    ci.initialize_project_memory(project_path)
+                    ci.index['needs_reindex'] = False
+                    ci._save_index()
+        except:
+            pass
 
 
 def check_workflow_completion(agent):
     """
-    LEARNING SYSTEM: Check if workflow is complete and lessons were captured.
+    LEARNING SYSTEM: Check if workflow is complete and lessons were captured (uses cache).
     This is the "verification layer" that detects skipped steps.
     
     Returns: (is_complete, warning_message)
     """
     try:
-        session_file = memory_dir / 'session_state.json'
-        if not session_file.exists():
+        state = get_session_state()
+        if not state:
             return True, None
-        
-        with open(session_file, 'r') as f:
-            state = json.load(f)
         
         tracking = state.get('workflow_tracking', {})
         
@@ -356,29 +400,26 @@ def record_workflow_mistake(mistake):
         with open(mistakes_file, 'a', encoding='utf-8') as f:
             f.write(entry)
         
-        # Also record to project-specific mistakes if project is known
-        try:
-            from context_index import ContextIndex
-            ci = ContextIndex()
-            current_project = ci.index.get('current_project')
-            if current_project:
-                ci.record_mistake(current_project, mistake)
-        except:
-            pass
+        # Also record to project-specific mistakes if project is known (use cached ctx)
+        ci = get_context_index()
+        if ci:
+            try:
+                current_project = ci.index.get('current_project')
+                if current_project:
+                    ci.record_mistake(current_project, mistake)
+            except:
+                pass
             
     except:
         pass
 
 
 def get_lessons_reminder():
-    """Get a reminder about capturing lessons if END was skipped."""
+    """Get a reminder about capturing lessons if END was skipped (uses cache)."""
     try:
-        session_file = memory_dir / 'session_state.json'
-        if not session_file.exists():
+        state = get_session_state()
+        if not state:
             return None
-        
-        with open(session_file, 'r') as f:
-            state = json.load(f)
         
         tracking = state.get('workflow_tracking', {})
         
@@ -407,6 +448,7 @@ def main():
         
         # Prevent infinite loop - if stop_hook_active, just exit
         if stop_hook_active:
+            save_all_caches()
             sys.exit(0)
         
         # Extract agent info from transcript
@@ -438,6 +480,7 @@ def main():
                 "reason": warning_message
             }
             print(json.dumps(output))
+            save_all_caches()
             sys.exit(0)
         # ================================================================
         
@@ -449,6 +492,7 @@ def main():
                 "reason": f"Brainstorm iteration in progress. Continue with refinement. Last agent: {agent or 'unknown'}. Consider running next iteration or review."
             }
             print(json.dumps(output))
+            save_all_caches()
             sys.exit(0)
         
         # Check if next_agent was signaled
@@ -463,12 +507,15 @@ def main():
             except:
                 pass
         
-        # Normal exit - allow subagent to stop
+        # Save all cached data before normal exit
+        save_all_caches()
         sys.exit(0)
         
     except json.JSONDecodeError:
+        save_all_caches()
         sys.exit(0)
     except Exception as e:
+        save_all_caches()
         sys.exit(0)
 
 if __name__ == '__main__':

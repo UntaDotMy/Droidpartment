@@ -1490,10 +1490,27 @@ function showStats(targetDir) {
     const memoryAgentCalls = (droidUsage.droids || {})['dpt-memory'] || 0;
     const memoryRatio = totalAgentCalls > 0 ? ((memoryAgentCalls / totalAgentCalls) * 100).toFixed(1) : 0;
     
-    // Learning rate
+    // Learning rate - use global sessions if project sessions are 0
     const totalLearning = lessonsCount + patternsCount;
-    const learningPerSession = projects.reduce((sum, p) => sum + p.sessions, 0);
-    const learningRate = learningPerSession > 0 ? (totalLearning / learningPerSession).toFixed(2) : 0;
+    let sessionCount = projects.reduce((sum, p) => sum + p.sessions, 0);
+    
+    // Fallback to global session history if project sessions are 0
+    if (sessionCount === 0) {
+        const sessionHistoryFile = path.join(memoryDir, 'session_history.json');
+        if (fs.existsSync(sessionHistoryFile)) {
+            try {
+                const history = JSON.parse(fs.readFileSync(sessionHistoryFile, 'utf8'));
+                sessionCount = (history.sessions || []).length;
+            } catch {}
+        }
+    }
+    
+    // If still 0, estimate from droid calls (assume ~3 agent calls per session)
+    if (sessionCount === 0 && totalAgentCalls > 0) {
+        sessionCount = Math.ceil(totalAgentCalls / 3);
+    }
+    
+    const learningRate = sessionCount > 0 ? (totalLearning / sessionCount).toFixed(2) : 'N/A';
     
     // Mistake prevention potential
     const preventionPotential = mistakesCount * 5; // Each mistake could prevent 5 future issues

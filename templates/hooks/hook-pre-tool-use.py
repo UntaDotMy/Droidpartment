@@ -29,6 +29,89 @@ from datetime import datetime
 memory_dir = Path(os.path.expanduser('~/.factory/memory'))
 sys.path.insert(0, str(memory_dir))
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# PERFORMANCE OPTIMIZATION: Singleton cache for expensive objects
+# ═══════════════════════════════════════════════════════════════════════════════
+_cache = {
+    'context_index': None,
+    'tool_stats': None,
+    'tool_stats_dirty': False
+}
+
+def get_context_index():
+    """Get cached ContextIndex singleton."""
+    if _cache['context_index'] is None:
+        try:
+            from context_index import ContextIndex
+            _cache['context_index'] = ContextIndex()
+        except:
+            pass
+    return _cache['context_index']
+
+def get_tool_stats():
+    """Get cached tool stats."""
+    if _cache['tool_stats'] is None:
+        stats_file = memory_dir / 'tool_usage.json'
+        try:
+            if stats_file.exists():
+                with open(stats_file, 'r') as f:
+                    _cache['tool_stats'] = json.load(f)
+            else:
+                _cache['tool_stats'] = {'total_calls': 0, 'tools': {}, 'blocked': 0}
+        except:
+            _cache['tool_stats'] = {'total_calls': 0, 'tools': {}, 'blocked': 0}
+    return _cache['tool_stats']
+
+def save_tool_stats():
+    """Save tool stats if dirty."""
+    if _cache['tool_stats_dirty'] and _cache['tool_stats']:
+        try:
+            stats_file = memory_dir / 'tool_usage.json'
+            with open(stats_file, 'w') as f:
+                json.dump(_cache['tool_stats'], f, indent=2)
+            _cache['tool_stats_dirty'] = False
+        except:
+            pass
+    # Also save droid stats if dirty
+    if _cache.get('droid_stats_dirty') and _cache.get('droid_stats'):
+        try:
+            with open(memory_dir / 'droid_usage.json', 'w') as f:
+                json.dump(_cache['droid_stats'], f, indent=2)
+            _cache['droid_stats_dirty'] = False
+        except:
+            pass
+
+def get_droid_stats():
+    """Get cached droid stats."""
+    if _cache.get('droid_stats') is None:
+        stats_file = memory_dir / 'droid_usage.json'
+        try:
+            if stats_file.exists():
+                with open(stats_file, 'r') as f:
+                    _cache['droid_stats'] = json.load(f)
+            else:
+                _cache['droid_stats'] = {'total_calls': 0, 'droids': {}}
+        except:
+            _cache['droid_stats'] = {'total_calls': 0, 'droids': {}}
+    return _cache['droid_stats']
+
+def record_droid_call(agent_name: str):
+    """Record a droid/agent call to global stats."""
+    if not agent_name:
+        return
+    try:
+        stats = get_droid_stats()
+        stats['total_calls'] = stats.get('total_calls', 0) + 1
+        if 'droids' not in stats:
+            stats['droids'] = {}
+        if agent_name not in stats['droids']:
+            stats['droids'][agent_name] = 0
+        stats['droids'][agent_name] += 1
+        stats['last_call'] = datetime.now().isoformat()
+        _cache['droid_stats_dirty'] = True
+    except:
+        pass
+
 # Patterns for dangerous commands
 DANGEROUS_COMMANDS = [
     r'\brm\s+-rf\s+[/~]',      # rm -rf / or ~
@@ -141,8 +224,9 @@ def validate_file_tool(tool_input: dict, tool_name: str) -> dict:
 def get_project_indexing_status(cwd: str) -> dict:
     """Get project indexing status for visible feedback."""
     try:
-        from context_index import ContextIndex
-        ctx = ContextIndex()
+        ctx = get_context_index()
+        if not ctx:
+            return {'status': 'error', 'error': 'ContextIndex not available'}
         
         # Check if project is indexed
         project_info = ctx.lookup_project(cwd)
@@ -274,26 +358,20 @@ def show_agent_feedback(tool_input: dict, cwd: str = None) -> dict:
 
 
 def record_tool_usage(tool_name: str, tool_input: dict):
-    """Record tool usage for analytics."""
+    """Record tool usage for analytics (uses cache)."""
     try:
-        stats_file = memory_dir / 'tool_usage.json'
-        
-        if stats_file.exists():
-            with open(stats_file, 'r') as f:
-                stats = json.load(f)
-        else:
-            stats = {'total_calls': 0, 'tools': {}, 'blocked': 0}
-        
-        stats['total_calls'] += 1
+        stats = get_tool_stats()
+        stats['total_calls'] = stats.get('total_calls', 0) + 1
         stats['last_call'] = datetime.now().isoformat()
         
-        if tool_name not in stats['tools']:
+        if tool_name not in stats.get('tools', {}):
+            if 'tools' not in stats:
+                stats['tools'] = {}
             stats['tools'][tool_name] = 0
         stats['tools'][tool_name] += 1
         
-        with open(stats_file, 'w') as f:
-            json.dump(stats, f, indent=2)
-            
+        _cache['tool_stats_dirty'] = True
+        # Don't save immediately - save at end of hook
     except:
         pass  # Silent fail
 
@@ -315,15 +393,19 @@ def main():
         
         # Check for Task calls (agent invocations)
         if tool_name == 'Task':
-            # Record agent call to project session
-            try:
-                from context_index import ContextIndex
-                ctx = ContextIndex()
-                agent = tool_input.get('subagent_type', 'unknown')
-                prompt = tool_input.get('prompt', '')
-                ctx.record_agent_call(cwd, agent, prompt)
-            except:
-                pass  # Silent fail
+            agent = tool_input.get('subagent_type', 'unknown')
+            prompt = tool_input.get('prompt', '')
+            
+            # Record to GLOBAL droid stats (for npx droidpartment stats)
+            record_droid_call(agent)
+            
+            # Record agent call to PROJECT session (use cached ctx)
+            ctx = get_context_index()
+            if ctx:
+                try:
+                    ctx.record_agent_call(cwd, agent, prompt)
+                except:
+                    pass  # Silent fail
             
             # Show agent feedback (visible output)
             result = show_agent_feedback(tool_input, cwd)
@@ -340,26 +422,24 @@ def main():
             permission = result.get('hookSpecificOutput', {}).get('permissionDecision', 'allow')
             
             if permission == 'deny':
-                # Update blocked count only for actual denials
-                try:
-                    stats_file = memory_dir / 'tool_usage.json'
-                    if stats_file.exists():
-                        with open(stats_file, 'r') as f:
-                            stats = json.load(f)
-                        stats['blocked'] = stats.get('blocked', 0) + 1
-                        with open(stats_file, 'w') as f:
-                            json.dump(stats, f, indent=2)
-                except:
-                    pass
+                # Update blocked count only for actual denials (use cached stats)
+                stats = get_tool_stats()
+                stats['blocked'] = stats.get('blocked', 0) + 1
+                _cache['tool_stats_dirty'] = True
+                save_tool_stats()
             
             print(json.dumps(result))
         
+        # Save cached stats before exit
+        save_tool_stats()
         sys.exit(0)
         
     except json.JSONDecodeError:
+        save_tool_stats()
         sys.exit(0)
     except Exception as e:
         # Silent fail - don't interrupt Droid
+        save_tool_stats()
         sys.exit(0)
 
 
