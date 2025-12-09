@@ -31,89 +31,164 @@ memory_dir = Path(os.path.expanduser('~/.factory/memory'))
 sys.path.insert(0, str(memory_dir))
 
 
-def load_relevant_lessons(prompt: str, max_lessons: int = 3) -> list:
-    """Load lessons relevant to the prompt."""
+def _parse_yaml_lessons(content: str) -> list:
+    """Parse YAML lessons manually (no deps)."""
     lessons = []
+    current_lesson = {}
     
-    try:
-        lessons_file = memory_dir / 'lessons.yaml'
-        if lessons_file.exists():
-            content = lessons_file.read_text()
-            
-            # Simple relevance matching based on keywords
-            prompt_lower = prompt.lower()
-            keywords = set(prompt_lower.split())
-            
-            # Parse YAML manually (no deps)
-            current_lesson = {}
-            for line in content.split('\n'):
-                if line.strip().startswith('- id:'):
-                    if current_lesson and 'lesson' in current_lesson:
-                        lessons.append(current_lesson)
-                    current_lesson = {'id': line.split(':', 1)[1].strip()}
-                elif ':' in line and current_lesson:
-                    key, value = line.strip().split(':', 1)
-                    key = key.strip().lstrip('- ')
-                    current_lesson[key] = value.strip().strip('"\'')
-            
+    for line in content.split('\n'):
+        if line.strip().startswith('- id:'):
             if current_lesson and 'lesson' in current_lesson:
                 lessons.append(current_lesson)
-            
-            # Score lessons by relevance
-            scored = []
-            for lesson in lessons:
-                lesson_text = f"{lesson.get('lesson', '')} {lesson.get('context', '')} {lesson.get('tags', '')}".lower()
-                score = sum(1 for kw in keywords if kw in lesson_text and len(kw) > 3)
-                if score > 0:
-                    scored.append((score, lesson))
-            
-            # Return top lessons
-            scored.sort(reverse=True, key=lambda x: x[0])
-            return [l for _, l in scored[:max_lessons]]
-            
+            current_lesson = {'id': line.split(':', 1)[1].strip()}
+        elif ':' in line and current_lesson:
+            key, value = line.strip().split(':', 1)
+            key = key.strip().lstrip('- ')
+            current_lesson[key] = value.strip().strip('"\'')
+    
+    if current_lesson and 'lesson' in current_lesson:
+        lessons.append(current_lesson)
+    
+    return lessons
+
+
+def load_relevant_lessons(prompt: str, max_lessons: int = 3, cwd: str = None) -> list:
+    """
+    Load lessons relevant to the prompt.
+    Checks both PROJECT-SPECIFIC and GLOBAL lessons.
+    """
+    all_lessons = []
+    
+    try:
+        # 1. Load PROJECT-SPECIFIC lessons first (more relevant)
+        if cwd:
+            try:
+                from context_index import ContextIndex
+                ctx = ContextIndex()
+                project_memory_dir = ctx.get_project_memory_dir(cwd)
+                project_lessons_file = project_memory_dir / 'lessons.yaml'
+                
+                if project_lessons_file.exists():
+                    content = project_lessons_file.read_text()
+                    project_lessons = _parse_yaml_lessons(content)
+                    # Mark as project-specific for higher priority
+                    for l in project_lessons:
+                        l['_source'] = 'project'
+                    all_lessons.extend(project_lessons)
+            except:
+                pass
+        
+        # 2. Load GLOBAL lessons
+        global_lessons_file = memory_dir / 'lessons.yaml'
+        if global_lessons_file.exists():
+            content = global_lessons_file.read_text()
+            global_lessons = _parse_yaml_lessons(content)
+            for l in global_lessons:
+                l['_source'] = 'global'
+            all_lessons.extend(global_lessons)
+        
+        if not all_lessons:
+            return []
+        
+        # Score lessons by relevance
+        prompt_lower = prompt.lower()
+        keywords = set(prompt_lower.split())
+        
+        scored = []
+        for lesson in all_lessons:
+            lesson_text = f"{lesson.get('lesson', '')} {lesson.get('context', '')} {lesson.get('tags', '')}".lower()
+            score = sum(1 for kw in keywords if kw in lesson_text and len(kw) > 3)
+            # Boost project-specific lessons
+            if lesson.get('_source') == 'project':
+                score += 2
+            if score > 0:
+                scored.append((score, lesson))
+        
+        # Return top lessons
+        scored.sort(reverse=True, key=lambda x: x[0])
+        return [l for _, l in scored[:max_lessons]]
+        
     except:
         pass
     
     return []
 
 
-def load_relevant_mistakes(prompt: str, max_mistakes: int = 2) -> list:
-    """Load mistakes to avoid based on prompt."""
+def _parse_yaml_mistakes(content: str) -> list:
+    """Parse YAML mistakes manually (no deps)."""
     mistakes = []
+    current_mistake = {}
     
-    try:
-        mistakes_file = memory_dir / 'mistakes.yaml'
-        if mistakes_file.exists():
-            content = mistakes_file.read_text()
-            
-            prompt_lower = prompt.lower()
-            keywords = set(prompt_lower.split())
-            
-            current_mistake = {}
-            for line in content.split('\n'):
-                if line.strip().startswith('- id:'):
-                    if current_mistake and 'mistake' in current_mistake:
-                        mistakes.append(current_mistake)
-                    current_mistake = {'id': line.split(':', 1)[1].strip()}
-                elif ':' in line and current_mistake:
-                    key, value = line.strip().split(':', 1)
-                    key = key.strip().lstrip('- ')
-                    current_mistake[key] = value.strip().strip('"\'')
-            
+    for line in content.split('\n'):
+        if line.strip().startswith('- id:'):
             if current_mistake and 'mistake' in current_mistake:
                 mistakes.append(current_mistake)
-            
-            # Score by relevance
-            scored = []
-            for mistake in mistakes:
-                mistake_text = f"{mistake.get('mistake', '')} {mistake.get('prevention', '')}".lower()
-                score = sum(1 for kw in keywords if kw in mistake_text and len(kw) > 3)
-                if score > 0:
-                    scored.append((score, mistake))
-            
-            scored.sort(reverse=True, key=lambda x: x[0])
-            return [m for _, m in scored[:max_mistakes]]
-            
+            current_mistake = {'id': line.split(':', 1)[1].strip()}
+        elif ':' in line and current_mistake:
+            key, value = line.strip().split(':', 1)
+            key = key.strip().lstrip('- ')
+            current_mistake[key] = value.strip().strip('"\'')
+    
+    if current_mistake and 'mistake' in current_mistake:
+        mistakes.append(current_mistake)
+    
+    return mistakes
+
+
+def load_relevant_mistakes(prompt: str, max_mistakes: int = 2, cwd: str = None) -> list:
+    """
+    Load mistakes to avoid based on prompt.
+    Checks both PROJECT-SPECIFIC and GLOBAL mistakes.
+    """
+    all_mistakes = []
+    
+    try:
+        # 1. Load PROJECT-SPECIFIC mistakes first
+        if cwd:
+            try:
+                from context_index import ContextIndex
+                ctx = ContextIndex()
+                project_memory_dir = ctx.get_project_memory_dir(cwd)
+                project_mistakes_file = project_memory_dir / 'mistakes.yaml'
+                
+                if project_mistakes_file.exists():
+                    content = project_mistakes_file.read_text()
+                    project_mistakes = _parse_yaml_mistakes(content)
+                    for m in project_mistakes:
+                        m['_source'] = 'project'
+                    all_mistakes.extend(project_mistakes)
+            except:
+                pass
+        
+        # 2. Load GLOBAL mistakes
+        global_mistakes_file = memory_dir / 'mistakes.yaml'
+        if global_mistakes_file.exists():
+            content = global_mistakes_file.read_text()
+            global_mistakes = _parse_yaml_mistakes(content)
+            for m in global_mistakes:
+                m['_source'] = 'global'
+            all_mistakes.extend(global_mistakes)
+        
+        if not all_mistakes:
+            return []
+        
+        # Score by relevance
+        prompt_lower = prompt.lower()
+        keywords = set(prompt_lower.split())
+        
+        scored = []
+        for mistake in all_mistakes:
+            mistake_text = f"{mistake.get('mistake', '')} {mistake.get('prevention', '')}".lower()
+            score = sum(1 for kw in keywords if kw in mistake_text and len(kw) > 3)
+            # Boost project-specific mistakes
+            if mistake.get('_source') == 'project':
+                score += 2
+            if score > 0:
+                scored.append((score, mistake))
+        
+        scored.sort(reverse=True, key=lambda x: x[0])
+        return [m for _, m in scored[:max_mistakes]]
+        
     except:
         pass
     
@@ -402,8 +477,11 @@ def should_auto_spec(prompt: str, complexity: str) -> bool:
     return any(trigger in prompt_lower for trigger in spec_triggers)
 
 
-def build_context_injection(prompt: str) -> str:
-    """Build context string to inject."""
+def build_context_injection(prompt: str, cwd: str = None) -> str:
+    """
+    Build context string to inject.
+    Uses cwd for project-specific context.
+    """
     parts = []
     
     # Smart Task Detection: Detect complexity AND which agents to use
@@ -415,16 +493,16 @@ def build_context_injection(prompt: str) -> str:
     if should_auto_spec(prompt, task_info['complexity']):
         parts.append("[AUTO-SPEC: This task requires specification first. Call dpt-product before implementation.]")
     
-    # Get relevant lessons
-    lessons = load_relevant_lessons(prompt)
+    # Get relevant lessons (project-specific + global)
+    lessons = load_relevant_lessons(prompt, cwd=cwd)
     if lessons:
         lesson_strs = []
         for l in lessons:
             lesson_strs.append(f"• {l.get('lesson', 'Unknown')}")
         parts.append(f"[Relevant lessons: {'; '.join(lesson_strs)}]")
     
-    # Get mistakes to avoid
-    mistakes = load_relevant_mistakes(prompt)
+    # Get mistakes to avoid (project-specific + global)
+    mistakes = load_relevant_mistakes(prompt, cwd=cwd)
     if mistakes:
         mistake_strs = []
         for m in mistakes:
@@ -447,12 +525,14 @@ def build_context_injection(prompt: str) -> str:
 def main():
     try:
         # Read input from Droid (Factory AI UserPromptSubmit format)
+        # Per docs: includes session_id, transcript_path, cwd, prompt
         input_data = json.load(sys.stdin)
         
         prompt = input_data.get('prompt', '')
+        cwd = input_data.get('cwd', os.getcwd())  # Get cwd from input (per Factory AI docs)
         
-        # Build context to inject
-        additional_context = build_context_injection(prompt)
+        # Build context to inject (passing cwd for project-specific context)
+        additional_context = build_context_injection(prompt, cwd)
         
         # Only output if we have context to add
         if additional_context:

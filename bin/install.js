@@ -249,17 +249,32 @@ function getProjectMemories(memoryDir) {
     for (const entry of entries) {
         if (entry.isDirectory()) {
             const projectPath = path.join(projectsDir, entry.name);
-            const lessons = countYamlEntries(path.join(projectPath, 'knowledge.yaml'));
+            const lessons = countYamlEntries(path.join(projectPath, 'lessons.yaml'));
             const mistakes = countYamlEntries(path.join(projectPath, 'mistakes.yaml'));
-            const size = getFileSize(path.join(projectPath, 'knowledge.yaml')) +
+            const patterns = countYamlEntries(path.join(projectPath, 'patterns.yaml'));
+            const size = getFileSize(path.join(projectPath, 'lessons.yaml')) +
                         getFileSize(path.join(projectPath, 'mistakes.yaml')) +
-                        getFileSize(path.join(projectPath, 'stats.yaml'));
+                        getFileSize(path.join(projectPath, 'patterns.yaml')) +
+                        getFileSize(path.join(projectPath, 'sessions.json')) +
+                        getFileSize(path.join(projectPath, 'STRUCTURE.md'));
             
-            if (lessons > 0 || mistakes > 0 || size > 0) {
+            // Count sessions
+            let sessions = 0;
+            const sessionsFile = path.join(projectPath, 'sessions.json');
+            if (fs.existsSync(sessionsFile)) {
+                try {
+                    const sessionsData = JSON.parse(fs.readFileSync(sessionsFile, 'utf8'));
+                    sessions = (sessionsData.sessions || []).length;
+                } catch {}
+            }
+            
+            if (lessons > 0 || mistakes > 0 || patterns > 0 || sessions > 0 || size > 0) {
                 projects.push({
                     name: entry.name,
                     lessons,
                     mistakes,
+                    patterns,
+                    sessions,
                     size
                 });
             }
@@ -310,7 +325,13 @@ async function manageMemory(targetDir) {
         console.log('  (none yet)');
     } else {
         for (const proj of projects) {
-            console.log(`  ${COLORS.cyan}${proj.name}${COLORS.reset}: ${proj.lessons} lessons, ${proj.mistakes} mistakes (${formatSize(proj.size)})`);
+            const stats = [];
+            if (proj.lessons > 0) stats.push(`${proj.lessons} lessons`);
+            if (proj.mistakes > 0) stats.push(`${proj.mistakes} mistakes`);
+            if (proj.patterns > 0) stats.push(`${proj.patterns} patterns`);
+            if (proj.sessions > 0) stats.push(`${proj.sessions} sessions`);
+            const statsStr = stats.length > 0 ? stats.join(', ') : 'empty';
+            console.log(`  ${COLORS.cyan}${proj.name}${COLORS.reset}: ${statsStr} (${formatSize(proj.size)})`);
         }
     }
     console.log('');
@@ -1127,6 +1148,7 @@ ${COLORS.bright}COMMANDS:${COLORS.reset}
   ${COLORS.green}update${COLORS.reset}          Update to latest version
   ${COLORS.green}reinstall${COLORS.reset}       Fresh install (uninstall + install)
   ${COLORS.yellow}status${COLORS.reset}          Check installation status
+  ${COLORS.yellow}stats${COLORS.reset}           Show usage & learning statistics
   ${COLORS.yellow}memory${COLORS.reset}          Manage/clean memory files
   ${COLORS.red}uninstall${COLORS.reset}       Remove Droidpartment
 
@@ -1146,6 +1168,7 @@ ${COLORS.bright}EXAMPLES:${COLORS.reset}
   npx droidpartment install -y         # Auto-install
   npx droidpartment update             # Update to latest
   npx droidpartment status             # Check status
+  npx droidpartment stats              # View usage statistics
   npx droidpartment reinstall --force  # Force fresh install
   npx droidpartment uninstall --purge  # Remove + delete memory
   npx droidpartment memory             # Manage memory
@@ -1188,6 +1211,50 @@ function checkInstallation() {
             const patternsCount = countYamlEntries(path.join(memoryDir, 'patterns.yaml'));
             const mistakesCount = countYamlEntries(path.join(memoryDir, 'mistakes.yaml'));
             console.log(`  Learning: ${lessonsCount} lessons, ${patternsCount} patterns, ${mistakesCount} mistakes`);
+            
+            // Check droid usage stats
+            const droidUsageFile = path.join(memoryDir, 'droid_usage.json');
+            if (fs.existsSync(droidUsageFile)) {
+                try {
+                    const droidStats = JSON.parse(fs.readFileSync(droidUsageFile, 'utf8'));
+                    const totalCalls = droidStats.total_calls || 0;
+                    const topDroids = Object.entries(droidStats.droids || {})
+                        .sort((a, b) => b[1] - a[1])
+                        .slice(0, 3)
+                        .map(([name, count]) => `${name}(${count})`)
+                        .join(', ');
+                    console.log(`  Droid Calls: ${totalCalls} total${topDroids ? ` (top: ${topDroids})` : ''}`);
+                } catch {}
+            }
+            
+            // Check tool usage stats
+            const toolStatsFile = path.join(memoryDir, 'tool_stats.json');
+            if (fs.existsSync(toolStatsFile)) {
+                try {
+                    const toolStats = JSON.parse(fs.readFileSync(toolStatsFile, 'utf8'));
+                    const totalExec = toolStats.total_executions || 0;
+                    const errors = toolStats.errors || 0;
+                    console.log(`  Tool Calls: ${totalExec} total, ${errors} errors`);
+                } catch {}
+            }
+            
+            // Check session stats
+            const sessionHistoryFile = path.join(memoryDir, 'session_history.json');
+            if (fs.existsSync(sessionHistoryFile)) {
+                try {
+                    const history = JSON.parse(fs.readFileSync(sessionHistoryFile, 'utf8'));
+                    const sessionCount = (history.sessions || []).length;
+                    console.log(`  Sessions: ${sessionCount} recorded`);
+                } catch {}
+            }
+            
+            // Check project count
+            const projects = getProjectMemories(memoryDir);
+            if (projects.length > 0) {
+                const totalProjectLessons = projects.reduce((sum, p) => sum + p.lessons, 0);
+                const totalProjectSessions = projects.reduce((sum, p) => sum + p.sessions, 0);
+                console.log(`  Projects: ${projects.length} indexed (${totalProjectLessons} lessons, ${totalProjectSessions} sessions)`);
+            }
         }
         
         // Check if update available
@@ -1225,6 +1292,220 @@ function checkInstallation() {
     }
 }
 
+function showStats(targetDir) {
+    const memoryDir = path.join(targetDir, 'memory');
+    
+    if (!fs.existsSync(memoryDir)) {
+        log.warn('No memory directory found. Run some sessions first to generate statistics.');
+        return;
+    }
+    
+    log.header('📊 DROIDPARTMENT STATISTICS');
+    console.log('');
+    
+    // ═══════════════════════════════════════════════════════════════
+    // DROID USAGE
+    // ═══════════════════════════════════════════════════════════════
+    console.log(`${COLORS.bright}🤖 DROID USAGE:${COLORS.reset}`);
+    const droidUsageFile = path.join(memoryDir, 'droid_usage.json');
+    if (fs.existsSync(droidUsageFile)) {
+        try {
+            const droidStats = JSON.parse(fs.readFileSync(droidUsageFile, 'utf8'));
+            const totalCalls = droidStats.total_calls || 0;
+            const droids = droidStats.droids || {};
+            
+            console.log(`  Total agent calls: ${COLORS.cyan}${totalCalls}${COLORS.reset}`);
+            console.log('');
+            
+            // Sort droids by usage
+            const sortedDroids = Object.entries(droids).sort((a, b) => b[1] - a[1]);
+            
+            if (sortedDroids.length > 0) {
+                console.log('  Agent breakdown:');
+                for (const [name, count] of sortedDroids) {
+                    const bar = '█'.repeat(Math.min(20, Math.round(count / totalCalls * 40)));
+                    const pct = ((count / totalCalls) * 100).toFixed(1);
+                    console.log(`    ${COLORS.cyan}${name.padEnd(15)}${COLORS.reset} ${bar} ${count} (${pct}%)`);
+                }
+            }
+            console.log('');
+            
+            // Custom vs built-in droids
+            const builtInDroids = ['dpt-memory', 'dpt-dev', 'dpt-qa', 'dpt-sec', 'dpt-review', 'dpt-output', 
+                                   'dpt-lead', 'dpt-arch', 'dpt-product', 'dpt-scrum', 'dpt-research',
+                                   'dpt-api', 'dpt-data', 'dpt-docs', 'dpt-ux', 'dpt-ops', 'dpt-perf', 'dpt-grammar'];
+            let builtInCount = 0;
+            let customCount = 0;
+            for (const [name, count] of sortedDroids) {
+                if (builtInDroids.includes(name)) {
+                    builtInCount += count;
+                } else {
+                    customCount += count;
+                }
+            }
+            console.log(`  Built-in agents: ${builtInCount} calls`);
+            console.log(`  Custom agents:   ${customCount} calls`);
+        } catch {
+            console.log('  (no data yet)');
+        }
+    } else {
+        console.log('  (no data yet)');
+    }
+    console.log('');
+    
+    // ═══════════════════════════════════════════════════════════════
+    // TOOL USAGE
+    // ═══════════════════════════════════════════════════════════════
+    console.log(`${COLORS.bright}🔧 TOOL USAGE:${COLORS.reset}`);
+    const toolStatsFile = path.join(memoryDir, 'tool_stats.json');
+    if (fs.existsSync(toolStatsFile)) {
+        try {
+            const toolStats = JSON.parse(fs.readFileSync(toolStatsFile, 'utf8'));
+            const totalExec = toolStats.total_executions || 0;
+            const errors = toolStats.errors || 0;
+            const tools = toolStats.tools || {};
+            
+            console.log(`  Total tool calls: ${COLORS.cyan}${totalExec}${COLORS.reset}`);
+            console.log(`  Errors: ${errors > 0 ? COLORS.red : COLORS.green}${errors}${COLORS.reset}`);
+            console.log('');
+            
+            // Sort tools by usage
+            const sortedTools = Object.entries(tools)
+                .map(([name, data]) => [name, typeof data === 'number' ? data : data.count || 0])
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 10);
+            
+            if (sortedTools.length > 0) {
+                console.log('  Top tools:');
+                for (const [name, count] of sortedTools) {
+                    console.log(`    ${name.padEnd(15)} ${count} calls`);
+                }
+            }
+        } catch {
+            console.log('  (no data yet)');
+        }
+    } else {
+        console.log('  (no data yet)');
+    }
+    console.log('');
+    
+    // ═══════════════════════════════════════════════════════════════
+    // SESSION HISTORY
+    // ═══════════════════════════════════════════════════════════════
+    console.log(`${COLORS.bright}📅 SESSION HISTORY:${COLORS.reset}`);
+    const sessionHistoryFile = path.join(memoryDir, 'session_history.json');
+    if (fs.existsSync(sessionHistoryFile)) {
+        try {
+            const history = JSON.parse(fs.readFileSync(sessionHistoryFile, 'utf8'));
+            const sessions = history.sessions || [];
+            
+            console.log(`  Total sessions: ${COLORS.cyan}${sessions.length}${COLORS.reset}`);
+            
+            if (sessions.length > 0) {
+                // Recent sessions
+                const recent = sessions.slice(-5).reverse();
+                console.log('');
+                console.log('  Recent sessions:');
+                for (const s of recent) {
+                    const date = s.started_at ? new Date(s.started_at).toLocaleDateString() : 'unknown';
+                    const agents = s.agents_run || 0;
+                    const tools = s.tools_used || 0;
+                    console.log(`    ${date}: ${agents} agents, ${tools} tools`);
+                }
+            }
+        } catch {
+            console.log('  (no data yet)');
+        }
+    } else {
+        console.log('  (no data yet)');
+    }
+    console.log('');
+    
+    // ═══════════════════════════════════════════════════════════════
+    // LEARNING STATS
+    // ═══════════════════════════════════════════════════════════════
+    console.log(`${COLORS.bright}🧠 LEARNING PROGRESS:${COLORS.reset}`);
+    
+    // Global learning
+    const lessonsCount = countYamlEntries(path.join(memoryDir, 'lessons.yaml'));
+    const patternsCount = countYamlEntries(path.join(memoryDir, 'patterns.yaml'));
+    const mistakesCount = countYamlEntries(path.join(memoryDir, 'mistakes.yaml'));
+    
+    console.log(`  Global knowledge:`);
+    console.log(`    Lessons learned:  ${COLORS.green}${lessonsCount}${COLORS.reset}`);
+    console.log(`    Patterns found:   ${COLORS.cyan}${patternsCount}${COLORS.reset}`);
+    console.log(`    Mistakes tracked: ${COLORS.yellow}${mistakesCount}${COLORS.reset}`);
+    console.log('');
+    
+    // Project-specific learning
+    const projects = getProjectMemories(memoryDir);
+    if (projects.length > 0) {
+        console.log(`  Project knowledge (${projects.length} projects):`);
+        
+        let totalProjectLessons = 0;
+        let totalProjectMistakes = 0;
+        let totalProjectPatterns = 0;
+        let totalProjectSessions = 0;
+        
+        for (const proj of projects) {
+            totalProjectLessons += proj.lessons || 0;
+            totalProjectMistakes += proj.mistakes || 0;
+            totalProjectPatterns += proj.patterns || 0;
+            totalProjectSessions += proj.sessions || 0;
+        }
+        
+        console.log(`    Total lessons:  ${COLORS.green}${totalProjectLessons}${COLORS.reset} across projects`);
+        console.log(`    Total mistakes: ${COLORS.yellow}${totalProjectMistakes}${COLORS.reset} tracked`);
+        console.log(`    Total patterns: ${COLORS.cyan}${totalProjectPatterns}${COLORS.reset} identified`);
+        console.log(`    Total sessions: ${COLORS.cyan}${totalProjectSessions}${COLORS.reset} recorded`);
+        console.log('');
+        
+        // Per-project breakdown
+        console.log('  Per-project breakdown:');
+        for (const proj of projects.slice(0, 10)) {
+            const stats = [];
+            if (proj.lessons > 0) stats.push(`${proj.lessons}L`);
+            if (proj.mistakes > 0) stats.push(`${proj.mistakes}M`);
+            if (proj.patterns > 0) stats.push(`${proj.patterns}P`);
+            if (proj.sessions > 0) stats.push(`${proj.sessions}S`);
+            const statsStr = stats.length > 0 ? stats.join('/') : 'new';
+            console.log(`    ${COLORS.cyan}${proj.name.substring(0, 30).padEnd(30)}${COLORS.reset} ${statsStr}`);
+        }
+        if (projects.length > 10) {
+            console.log(`    ... and ${projects.length - 10} more projects`);
+        }
+    }
+    console.log('');
+    
+    // ═══════════════════════════════════════════════════════════════
+    // BRAIN EFFICIENCY
+    // ═══════════════════════════════════════════════════════════════
+    console.log(`${COLORS.bright}⚡ BRAIN EFFICIENCY:${COLORS.reset}`);
+    
+    // Calculate efficiency metrics
+    const droidUsage = fs.existsSync(droidUsageFile) ? JSON.parse(fs.readFileSync(droidUsageFile, 'utf8')) : {};
+    const totalAgentCalls = droidUsage.total_calls || 0;
+    
+    // Memory agent usage (shows learning discipline)
+    const memoryAgentCalls = (droidUsage.droids || {})['dpt-memory'] || 0;
+    const memoryRatio = totalAgentCalls > 0 ? ((memoryAgentCalls / totalAgentCalls) * 100).toFixed(1) : 0;
+    
+    // Learning rate
+    const totalLearning = lessonsCount + patternsCount;
+    const learningPerSession = projects.reduce((sum, p) => sum + p.sessions, 0);
+    const learningRate = learningPerSession > 0 ? (totalLearning / learningPerSession).toFixed(2) : 0;
+    
+    // Mistake prevention potential
+    const preventionPotential = mistakesCount * 5; // Each mistake could prevent 5 future issues
+    
+    console.log(`  Memory agent usage: ${memoryRatio}% of calls (higher = better learning discipline)`);
+    console.log(`  Learning rate: ${learningRate} lessons/session`);
+    console.log(`  Mistake prevention: ~${preventionPotential} potential issues avoided`);
+    console.log('');
+    
+    log.success('Statistics generated from ~/.factory/memory/');
+}
+
 // Parse arguments into command and flags
 function parseArgs(args) {
     const result = {
@@ -1242,7 +1523,7 @@ function parseArgs(args) {
         }
     };
     
-    const commands = ['install', 'update', 'uninstall', 'reinstall', 'status', 'memory'];
+    const commands = ['install', 'update', 'uninstall', 'reinstall', 'status', 'memory', 'stats'];
     
     for (const arg of args) {
         if (commands.includes(arg)) {
@@ -1271,6 +1552,8 @@ function parseArgs(args) {
             result.command = 'memory'; // Legacy support
         } else if (arg === '--check') {
             result.command = 'status'; // Legacy support
+        } else if (arg === '--stats') {
+            result.command = 'stats'; // Show statistics
         } else if (arg === '--update') {
             result.flags.force = true; // Legacy: --update means force update
         } else if (arg.startsWith('-')) {
@@ -1319,6 +1602,13 @@ async function main() {
     // Handle status command
     if (command === 'status') {
         checkInstallation();
+        process.exit(EXIT_SUCCESS);
+        return;
+    }
+    
+    // Handle stats command
+    if (command === 'stats') {
+        showStats(PERSONAL_DIR);
         process.exit(EXIT_SUCCESS);
         return;
     }

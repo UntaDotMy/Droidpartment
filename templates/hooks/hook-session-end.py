@@ -340,6 +340,15 @@ def main():
         
         session_id = input_data.get('session_id', 'unknown')
         reason = input_data.get('reason', 'exit')
+        cwd = input_data.get('cwd', os.getcwd())
+        
+        # End project-specific session tracking
+        try:
+            from context_index import ContextIndex
+            ctx = ContextIndex()
+            ctx.end_session(cwd, session_id)
+        except:
+            pass  # Silent fail
         
         # Save session summary
         save_session_summary()

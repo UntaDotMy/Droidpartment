@@ -249,34 +249,42 @@ def extract_mistakes_from_transcript(transcript_path, agent):
     return mistakes[:3]  # Max 3 mistakes per agent run
 
 def record_agent_mistakes(mistakes):
-    """Record extracted mistakes to project memory."""
+    """DEPRECATED: Use record_agent_mistakes_to_project instead."""
+    pass
+
+def record_agent_mistakes_to_project(cwd: str, mistakes):
+    """
+    Record extracted mistakes to PROJECT-SPECIFIC memory.
+    Uses cwd directly instead of relying on current_project in index.
+    """
     if not mistakes:
         return
     
     try:
         from context_index import ContextIndex
         ci = ContextIndex()
-        current_project = ci.index.get('current_project')
         
-        if current_project:
-            for mistake in mistakes:
-                mistake['prevention'] = f"Review before completing: {mistake.get('description', '')[:50]}"
-                ci.record_mistake(current_project, mistake)
+        for mistake in mistakes:
+            mistake['prevention'] = f"Review before completing: {mistake.get('description', '')[:50]}"
+            ci.record_mistake(cwd, mistake)
     except:
         pass
 
-def refresh_project_index_if_needed():
-    """Refresh project index if files were changed during agent run."""
+def refresh_project_index_if_needed(cwd: str = None):
+    """
+    Refresh project index if files were changed during agent run.
+    Uses cwd directly instead of relying on current_project in index.
+    """
     try:
         from context_index import ContextIndex
         ci = ContextIndex()
         
         # Check if re-index is needed
         if ci.index.get('needs_reindex'):
-            current_project = ci.index.get('current_project')
-            if current_project:
+            project_path = cwd or ci.index.get('current_project')
+            if project_path:
                 # Re-initialize project memory
-                ci.initialize_project_memory(current_project)
+                ci.initialize_project_memory(project_path)
                 ci.index['needs_reindex'] = False
                 ci._save_index()
     except:
@@ -395,6 +403,7 @@ def main():
         session_id = input_data.get('session_id', 'unknown')
         transcript_path = input_data.get('transcript_path', '')
         stop_hook_active = input_data.get('stop_hook_active', False)
+        cwd = input_data.get('cwd', os.getcwd())  # Get cwd from input (per Factory AI docs)
         
         # Prevent infinite loop - if stop_hook_active, just exit
         if stop_hook_active:
@@ -410,13 +419,13 @@ def main():
         update_droid_stats(agent)
         update_session_state(agent)
         
-        # Extract and record any mistakes from agent output
+        # Extract and record any mistakes from agent output (PROJECT-SPECIFIC)
         mistakes = extract_mistakes_from_transcript(transcript_path, agent)
         if mistakes:
-            record_agent_mistakes(mistakes)
+            record_agent_mistakes_to_project(cwd, mistakes)
         
         # Refresh project index if files changed during agent run
-        refresh_project_index_if_needed()
+        refresh_project_index_if_needed(cwd)
         
         # ============= LEARNING SYSTEM: VERIFICATION LAYER =============
         # Check if dpt-output ran without dpt-memory END (lesson capture)

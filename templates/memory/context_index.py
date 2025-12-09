@@ -836,7 +836,134 @@ class ContextIndex:
                 'artifacts/' if is_first_time else None
             ]
         }
+
+    # ==================== SESSION TRACKING (PROJECT-SPECIFIC) ====================
     
+    def start_session(self, project_path: str, session_id: str) -> Dict:
+        """
+        Record session start for a project.
+        
+        PROJECT-SPECIFIC: Saves to project's sessions.json
+        """
+        project_path = str(Path(project_path).resolve())
+        project_memory_dir = self.get_project_memory_dir(project_path)
+        project_memory_dir.mkdir(parents=True, exist_ok=True)
+        
+        sessions_file = project_memory_dir / 'sessions.json'
+        
+        # Load existing sessions
+        sessions = {'sessions': [], 'current': None}
+        if sessions_file.exists():
+            try:
+                with open(sessions_file, 'r') as f:
+                    sessions = json.load(f)
+            except:
+                pass
+        
+        # Create current session record
+        current_session = {
+            'session_id': session_id,
+            'started_at': datetime.now().isoformat(),
+            'ended_at': None,
+            'agents_called': [],
+            'files_modified': [],
+            'status': 'active'
+        }
+        
+        sessions['current'] = current_session
+        
+        with open(sessions_file, 'w') as f:
+            json.dump(sessions, f, indent=2)
+        
+        return current_session
+    
+    def end_session(self, project_path: str, session_id: str = None) -> Dict:
+        """
+        Record session end for a project.
+        
+        PROJECT-SPECIFIC: Updates project's sessions.json
+        """
+        project_path = str(Path(project_path).resolve())
+        project_memory_dir = self.get_project_memory_dir(project_path)
+        
+        sessions_file = project_memory_dir / 'sessions.json'
+        
+        if not sessions_file.exists():
+            return {'error': 'No sessions file'}
+        
+        with open(sessions_file, 'r') as f:
+            sessions = json.load(f)
+        
+        current = sessions.get('current')
+        if current:
+            current['ended_at'] = datetime.now().isoformat()
+            current['status'] = 'completed'
+            
+            # Move to history
+            sessions['sessions'].append(current)
+            sessions['current'] = None
+            
+            # Keep last 100 sessions
+            if len(sessions['sessions']) > 100:
+                sessions['sessions'] = sessions['sessions'][-100:]
+        
+        with open(sessions_file, 'w') as f:
+            json.dump(sessions, f, indent=2)
+        
+        return current or {}
+    
+    def record_agent_call(self, project_path: str, agent_name: str, prompt: str = ''):
+        """
+        Record an agent call in current session.
+        
+        PROJECT-SPECIFIC: Updates project's sessions.json current session
+        """
+        project_path = str(Path(project_path).resolve())
+        project_memory_dir = self.get_project_memory_dir(project_path)
+        
+        sessions_file = project_memory_dir / 'sessions.json'
+        
+        if not sessions_file.exists():
+            return
+        
+        try:
+            with open(sessions_file, 'r') as f:
+                sessions = json.load(f)
+            
+            current = sessions.get('current')
+            if current:
+                current['agents_called'].append({
+                    'agent': agent_name,
+                    'prompt': prompt[:100] if prompt else '',  # Truncate
+                    'at': datetime.now().isoformat()
+                })
+                
+                with open(sessions_file, 'w') as f:
+                    json.dump(sessions, f, indent=2)
+        except:
+            pass
+    
+    def get_project_sessions(self, project_path: str, limit: int = 10) -> List[Dict]:
+        """
+        Get recent sessions for a project.
+        
+        PROJECT-SPECIFIC: Reads from project's sessions.json
+        """
+        project_path = str(Path(project_path).resolve())
+        project_memory_dir = self.get_project_memory_dir(project_path)
+        
+        sessions_file = project_memory_dir / 'sessions.json'
+        
+        if not sessions_file.exists():
+            return []
+        
+        try:
+            with open(sessions_file, 'r') as f:
+                sessions = json.load(f)
+            return sessions.get('sessions', [])[-limit:]
+        except:
+            return []
+
     def _generate_structure_md(self, project_index: Dict, output_path: Path):
         """Generate human-readable STRUCTURE.md file."""
         lines = [

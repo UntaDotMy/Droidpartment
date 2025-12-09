@@ -190,9 +190,9 @@ def get_project_indexing_status(cwd: str) -> dict:
         }
 
 
-def show_indexing_feedback(tool_input: dict) -> dict:
+def show_agent_feedback(tool_input: dict, cwd: str = None) -> dict:
     """
-    Show visible indexing feedback when dpt-memory is called.
+    Show visible feedback for ALL agent calls.
     
     PreToolUse output IS shown to user (unlike SessionStart).
     We use permissionDecisionReason to display feedback.
@@ -200,34 +200,35 @@ def show_indexing_feedback(tool_input: dict) -> dict:
     subagent_type = tool_input.get('subagent_type', '')
     prompt = tool_input.get('prompt', '')
     
-    # Only show for dpt-memory START
-    if subagent_type != 'dpt-memory':
-        return None
-    if 'START' not in prompt.upper():
+    if not subagent_type:
         return None
     
-    # Get current working directory
-    cwd = os.getcwd()
+    # Only show for dpt-* agents
+    if not subagent_type.startswith('dpt-'):
+        return None
     
-    # Get indexing status
-    status = get_project_indexing_status(cwd)
+    # Use provided cwd or fallback
+    if not cwd:
+        cwd = os.getcwd()
     
-    if status.get('status') == 'error':
-        # Still allow, just note the error
-        return {
-            "hookSpecificOutput": {
-                "hookEventName": "PreToolUse",
-                "permissionDecision": "allow",
-                "permissionDecisionReason": f"⚠️ Indexing error: {status.get('error')}"
-            }
-        }
-    
-    # Build visible feedback
-    if status.get('is_new'):
-        feedback_lines = status.get('feedback', [])
-        feedback_text = "\n".join(feedback_lines) if feedback_lines else ""
+    # Special handling for dpt-memory START (indexing)
+    if subagent_type == 'dpt-memory' and 'START' in prompt.upper():
+        status = get_project_indexing_status(cwd)
         
-        reason = f"""
+        if status.get('status') == 'error':
+            return {
+                "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
+                    "permissionDecision": "allow",
+                    "permissionDecisionReason": f"⚠️ Indexing error: {status.get('error')}"
+                }
+            }
+        
+        if status.get('is_new'):
+            feedback_lines = status.get('feedback', [])
+            feedback_text = "\n".join(feedback_lines) if feedback_lines else ""
+            
+            reason = f"""
 🤖 DROIDPARTMENT - NEW PROJECT INDEXED
 ═══════════════════════════════════════════════════════════════════════
 {feedback_text}
@@ -235,16 +236,32 @@ def show_indexing_feedback(tool_input: dict) -> dict:
 📁 Memory: {status.get('memory_dir')}
 📊 Files: {status.get('file_count')}
 ═══════════════════════════════════════════════════════════════════════
-✅ Project indexed and ready!
+✅ Starting agent: {subagent_type}
 """
-    else:
-        reason = f"""
+        else:
+            reason = f"""
 🤖 DROIDPARTMENT - PROJECT LOADED
 ═══════════════════════════════════════════════════════════════════════
 📋 Project: {status.get('project_id')}
-📁 Memory: {status.get('memory_dir')}
-📊 Files: {status.get('file_count')}
+ Files: {status.get('file_count')}
 ═══════════════════════════════════════════════════════════════════════
+✅ Starting agent: {subagent_type}
+"""
+        return {
+            "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "allow",
+                "permissionDecisionReason": reason.strip()
+            }
+        }
+    
+    # For all other dpt-* agents - show what's running
+    short_prompt = prompt[:80] + '...' if len(prompt) > 80 else prompt
+    
+    reason = f"""
+🤖 DROIDPARTMENT AGENT: {subagent_type}
+───────────────────────────────────────────────────────────────────────
+📋 Task: {short_prompt}
 """
     
     return {
@@ -288,6 +305,7 @@ def main():
         
         tool_name = input_data.get('tool_name', '')
         tool_input = input_data.get('tool_input', {})
+        cwd = input_data.get('cwd', os.getcwd())  # Get cwd from input or fallback
         
         # Record tool usage
         record_tool_usage(tool_name, tool_input)
@@ -295,9 +313,20 @@ def main():
         # Validate based on tool type
         result = None
         
-        # Check for Task calls to dpt-memory (show indexing feedback)
+        # Check for Task calls (agent invocations)
         if tool_name == 'Task':
-            result = show_indexing_feedback(tool_input)
+            # Record agent call to project session
+            try:
+                from context_index import ContextIndex
+                ctx = ContextIndex()
+                agent = tool_input.get('subagent_type', 'unknown')
+                prompt = tool_input.get('prompt', '')
+                ctx.record_agent_call(cwd, agent, prompt)
+            except:
+                pass  # Silent fail
+            
+            # Show agent feedback (visible output)
+            result = show_agent_feedback(tool_input, cwd)
         
         elif tool_name in ['Bash', 'Execute']:
             result = validate_bash_tool(tool_input)

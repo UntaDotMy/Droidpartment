@@ -5,6 +5,44 @@ All notable changes to Droidpartment are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.13] - 2025-12-09
+
+### 🧠 Complete Memory System Overhaul + Statistics Command
+
+**Major Changes:**
+
+1. **Project-Specific Session Tracking**
+   - `sessions.json` per project tracks all sessions
+   - Records agent calls, timestamps, status
+   - `start_session()`, `end_session()`, `record_agent_call()` methods
+
+2. **Learning System Fixes**
+   - Lessons/mistakes now load from PROJECT + GLOBAL sources
+   - Project-specific lessons get priority boost (+2)
+   - Fixed `knowledge.yaml` → `lessons.yaml` bug in installer
+
+3. **All Hooks Use `cwd` from Factory AI Input**
+   - PostToolUse, SubagentStop, UserPromptSubmit now properly extract `cwd`
+   - Consistent project-specific operations across all hooks
+
+4. **New `stats` Command**
+   - `npx droidpartment stats` shows comprehensive statistics
+   - Droid usage breakdown (built-in vs custom)
+   - Tool usage stats
+   - Session history
+   - Learning progress (global + per-project)
+   - Brain efficiency metrics
+
+5. **Enhanced Status Command**
+   - Shows droid calls, tool usage, sessions, projects
+   - Displays top droids by usage
+
+6. **Updated dpt-memory Agent**
+   - Documentation now shows PROJECT + GLOBAL paths
+   - Clearer guidance on memory file locations
+
+---
+
 ## [3.2.12] - 2025-12-09
 
 ### 📊 Visible Indexing via PreToolUse + Manifest-Based Installer

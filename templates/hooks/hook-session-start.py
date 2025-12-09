@@ -342,6 +342,14 @@ def main():
         # Initialize project memory (first-time: creates folder, STRUCTURE.md, files.json)
         project_init = initialize_project_memory(cwd)
         
+        # Start project-specific session tracking
+        try:
+            from context_index import ContextIndex
+            ctx = ContextIndex()
+            ctx.start_session(cwd, session_id)
+        except:
+            pass  # Silent fail
+        
         # Get recent mistakes to warn agents
         mistakes = get_recent_mistakes(cwd, limit=3)
         
@@ -359,7 +367,7 @@ def main():
             additional_context = f"{resume_context} {additional_context}"
         
         # Add Droidpartment INSTRUCTION (not just banner)
-        version = "3.2.12"
+        version = "3.2.13"
         
         # Check if this is a NEW project (not yet in memory)
         is_new_project = project_init and project_init.get('is_first_time', False)

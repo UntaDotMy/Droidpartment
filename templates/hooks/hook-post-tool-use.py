@@ -235,8 +235,11 @@ def track_file_modification(tool_name, tool_input, tool_response):
     except:
         pass
 
-def track_file_deletion(tool_name, tool_input, tool_response):
-    """Track file deletions and update project tree."""
+def track_file_deletion(tool_name, tool_input, tool_response, cwd: str = None):
+    """
+    Track file deletions and update project tree.
+    Uses cwd directly instead of current_project from index.
+    """
     # Check if this was a delete operation
     if tool_name != 'Execute':
         return
@@ -257,14 +260,13 @@ def track_file_deletion(tool_name, tool_input, tool_response):
         # This is best-effort
         response_str = str(tool_response) if tool_response else ''
         if 'error' not in response_str.lower():
-            # Update project tree
+            # Update project tree - use cwd directly
             try:
                 from context_index import ContextIndex
                 ci = ContextIndex()
-                current_project = ci.index.get('current_project')
-                if current_project:
-                    # Note: We can't easily extract the exact file, but we can
-                    # flag that a deletion occurred for re-indexing
+                project_path = cwd or ci.index.get('current_project')
+                if project_path:
+                    # Flag that a deletion occurred for re-indexing
                     ci.index['needs_reindex'] = True
                     ci._save_index()
             except:
@@ -299,11 +301,13 @@ def update_session_progress():
 def main():
     try:
         # Read input from Droid (Factory AI PostToolUse format)
+        # Per docs: includes session_id, transcript_path, cwd, tool_name, tool_input, tool_response
         input_data = json.load(sys.stdin)
         
         tool_name = input_data.get('tool_name', 'unknown')
         tool_input = input_data.get('tool_input', {})
         tool_response = input_data.get('tool_response', {})
+        cwd = input_data.get('cwd', os.getcwd())  # Get cwd from input (per Factory AI docs)
         
         # Log tool usage
         log_tool_usage(tool_name, tool_response)
@@ -317,7 +321,7 @@ def main():
         track_file_modification(tool_name, tool_input, tool_response)
         
         # Track file deletions (updates project tree)
-        track_file_deletion(tool_name, tool_input, tool_response)
+        track_file_deletion(tool_name, tool_input, tool_response, cwd)
         
         # Update progress
         update_session_progress()

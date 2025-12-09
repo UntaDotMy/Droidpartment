@@ -64,9 +64,15 @@ When called with "START" (on existing project):
 1. Read the task description
 2. Search memory files for RELEVANT lessons:
    ```
-   ~/.factory/memory/lessons.yaml   - Past learnings
-   ~/.factory/memory/patterns.yaml  - Successful patterns
-   ~/.factory/memory/mistakes.yaml  - Mistakes to avoid
+   # PROJECT-SPECIFIC (check first - more relevant):
+   ~/.factory/memory/projects/{project_name}/lessons.yaml
+   ~/.factory/memory/projects/{project_name}/patterns.yaml  
+   ~/.factory/memory/projects/{project_name}/mistakes.yaml
+   
+   # GLOBAL (cross-project learnings):
+   ~/.factory/memory/lessons.yaml   - Universal learnings
+   ~/.factory/memory/patterns.yaml  - Universal patterns
+   ~/.factory/memory/mistakes.yaml  - Universal mistakes
    ```
 3. Return ONLY lessons relevant to THIS task (not all lessons)
 
