@@ -138,6 +138,124 @@ def validate_file_tool(tool_input: dict, tool_name: str) -> dict:
     return None
 
 
+def get_project_indexing_status(cwd: str) -> dict:
+    """Get project indexing status for visible feedback."""
+    try:
+        from context_index import ContextIndex
+        ctx = ContextIndex()
+        
+        # Check if project is indexed
+        project_info = ctx.lookup_project(cwd)
+        
+        if project_info:
+            # Project exists in registry
+            project_id = project_info.get('project_id', 'unknown')
+            memory_dir_path = project_info.get('memory_dir', '')
+            
+            # Check if we need to update (compare file count)
+            project_memory_dir = ctx.get_project_memory_dir(cwd)
+            files_json = project_memory_dir / 'files.json'
+            
+            if files_json.exists():
+                with open(files_json, 'r') as f:
+                    data = json.load(f)
+                file_count = len(data.get('files', []))
+                updated_at = data.get('updated_at', 'unknown')
+                
+                return {
+                    'status': 'indexed',
+                    'project_id': project_id,
+                    'memory_dir': str(project_memory_dir),
+                    'file_count': file_count,
+                    'updated_at': updated_at,
+                    'is_new': False
+                }
+        
+        # Project not indexed yet - do initial indexing
+        result = ctx.initialize_project_memory(cwd)
+        
+        return {
+            'status': 'new',
+            'project_id': result.get('project_id', 'unknown'),
+            'memory_dir': result.get('memory_dir', ''),
+            'file_count': result.get('file_count', 0),
+            'is_new': True,
+            'feedback': result.get('feedback', [])
+        }
+        
+    except Exception as e:
+        return {
+            'status': 'error',
+            'error': str(e)
+        }
+
+
+def show_indexing_feedback(tool_input: dict) -> dict:
+    """
+    Show visible indexing feedback when dpt-memory is called.
+    
+    PreToolUse output IS shown to user (unlike SessionStart).
+    We use permissionDecisionReason to display feedback.
+    """
+    subagent_type = tool_input.get('subagent_type', '')
+    prompt = tool_input.get('prompt', '')
+    
+    # Only show for dpt-memory START
+    if subagent_type != 'dpt-memory':
+        return None
+    if 'START' not in prompt.upper():
+        return None
+    
+    # Get current working directory
+    cwd = os.getcwd()
+    
+    # Get indexing status
+    status = get_project_indexing_status(cwd)
+    
+    if status.get('status') == 'error':
+        # Still allow, just note the error
+        return {
+            "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "allow",
+                "permissionDecisionReason": f"⚠️ Indexing error: {status.get('error')}"
+            }
+        }
+    
+    # Build visible feedback
+    if status.get('is_new'):
+        feedback_lines = status.get('feedback', [])
+        feedback_text = "\n".join(feedback_lines) if feedback_lines else ""
+        
+        reason = f"""
+🤖 DROIDPARTMENT - NEW PROJECT INDEXED
+═══════════════════════════════════════════════════════════════════════
+{feedback_text}
+📋 Project ID: {status.get('project_id')}
+📁 Memory: {status.get('memory_dir')}
+📊 Files: {status.get('file_count')}
+═══════════════════════════════════════════════════════════════════════
+✅ Project indexed and ready!
+"""
+    else:
+        reason = f"""
+🤖 DROIDPARTMENT - PROJECT LOADED
+═══════════════════════════════════════════════════════════════════════
+📋 Project: {status.get('project_id')}
+📁 Memory: {status.get('memory_dir')}
+📊 Files: {status.get('file_count')}
+═══════════════════════════════════════════════════════════════════════
+"""
+    
+    return {
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "allow",
+            "permissionDecisionReason": reason.strip()
+        }
+    }
+
+
 def record_tool_usage(tool_name: str, tool_input: dict):
     """Record tool usage for analytics."""
     try:
@@ -177,25 +295,33 @@ def main():
         # Validate based on tool type
         result = None
         
-        if tool_name in ['Bash', 'Execute']:
+        # Check for Task calls to dpt-memory (show indexing feedback)
+        if tool_name == 'Task':
+            result = show_indexing_feedback(tool_input)
+        
+        elif tool_name in ['Bash', 'Execute']:
             result = validate_bash_tool(tool_input)
         
         elif tool_name in ['Write', 'Edit', 'Create']:
             result = validate_file_tool(tool_input, tool_name)
         
-        # Output result if validation failed
+        # Output result if we have one
         if result:
-            # Update blocked count
-            try:
-                stats_file = memory_dir / 'tool_usage.json'
-                if stats_file.exists():
-                    with open(stats_file, 'r') as f:
-                        stats = json.load(f)
-                    stats['blocked'] = stats.get('blocked', 0) + 1
-                    with open(stats_file, 'w') as f:
-                        json.dump(stats, f, indent=2)
-            except:
-                pass
+            # Check if this was a deny (blocked) vs allow (just showing info)
+            permission = result.get('hookSpecificOutput', {}).get('permissionDecision', 'allow')
+            
+            if permission == 'deny':
+                # Update blocked count only for actual denials
+                try:
+                    stats_file = memory_dir / 'tool_usage.json'
+                    if stats_file.exists():
+                        with open(stats_file, 'r') as f:
+                            stats = json.load(f)
+                        stats['blocked'] = stats.get('blocked', 0) + 1
+                        with open(stats_file, 'w') as f:
+                            json.dump(stats, f, indent=2)
+                except:
+                    pass
             
             print(json.dumps(result))
         

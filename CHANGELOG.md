@@ -5,6 +5,29 @@ All notable changes to Droidpartment are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.12] - 2025-12-09
+
+### 📊 Visible Indexing via PreToolUse + Manifest-Based Installer
+
+**Changes:**
+
+1. **Visible Indexing Feedback** - Moved to PreToolUse hook (SessionStart cannot show visible output by Factory AI design)
+   - Shows project indexing status when `dpt-memory START` is called
+   - Displays: Project ID, memory folder, file count
+   - Works for both new and existing projects
+
+2. **Manifest-Based Installer** - Complete rewrite
+   - Tracks all installed files with MD5 hashes in `.droidpartment-manifest.json`
+   - Clean uninstall removes exactly what was installed
+   - Update detects and removes stale files from old versions
+   - No legacy compatibility - clean architecture
+
+3. **Project Registry** - Deterministic project naming
+   - Uses MD5 hash for consistent folder names across sessions
+   - Registry maps project paths to memory folders
+
+---
+
 ## [3.2.10] - 2025-12-09
 
 ### 👁️ Visible Indexing Feedback (systemMessage fix)

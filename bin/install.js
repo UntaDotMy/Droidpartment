@@ -1,6 +1,12 @@
 #!/usr/bin/env node
 /**
- * Droidpartment CLI Installer
+ * Droidpartment CLI Installer v2.0 - MANIFEST-BASED
+ * 
+ * Features:
+ *   - Tracks all installed files with MD5 hashes
+ *   - Clean uninstall removes exactly what was installed
+ *   - Update detects and removes stale files from old versions
+ *   - Settings.json modifications are tracked and reversible
  * 
  * Commands:
  *   npx droidpartment                 # Interactive install/update
@@ -32,12 +38,14 @@
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const readline = require('readline');
 
 // === CONFIGURATION ===
 const TEMPLATES_DIR = path.join(__dirname, '..', 'templates');
 const PERSONAL_DIR = path.join(process.env.HOME || process.env.USERPROFILE, '.factory');
 const PROJECT_DIR = path.join(process.cwd(), '.factory');
+const MANIFEST_FILE = '.droidpartment-manifest.json';
 
 // Get version from package.json
 const PACKAGE_JSON = require(path.join(__dirname, '..', 'package.json'));
@@ -76,29 +84,101 @@ const log = {
     dryRun: (msg) => DRY_RUN && console.log(`${COLORS.yellow}[DRY-RUN]${COLORS.reset} ${msg}`)
 };
 
+// === MANIFEST SYSTEM ===
+// The manifest tracks every file we install so we can cleanly remove them
+
+function getFileHash(filePath) {
+    if (!fs.existsSync(filePath)) return null;
+    const content = fs.readFileSync(filePath);
+    return crypto.createHash('md5').update(content).digest('hex');
+}
+
+function loadManifest(targetDir) {
+    const manifestPath = path.join(targetDir, MANIFEST_FILE);
+    if (fs.existsSync(manifestPath)) {
+        try {
+            return JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+        } catch (e) {
+            return null;
+        }
+    }
+    return null;
+}
+
+function saveManifest(targetDir, manifest) {
+    const manifestPath = path.join(targetDir, MANIFEST_FILE);
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+}
+
+function createManifest(version) {
+    return {
+        version: version,
+        installedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        files: {},           // relativePath -> { hash, size, type }
+        directories: [],     // directories we created
+        settingsModified: false,
+        hooksRegistered: []
+    };
+}
+
 function ensureDir(dir) {
     if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
     }
 }
 
-function copyDir(src, dest) {
+// Copy directory and track all files in manifest
+function copyDirWithManifest(src, dest, manifest, baseDir) {
     ensureDir(dest);
     const entries = fs.readdirSync(src, { withFileTypes: true });
     let copied = 0;
+    
+    // Track the directory itself
+    const relDir = path.relative(baseDir, dest);
+    if (relDir && !manifest.directories.includes(relDir)) {
+        manifest.directories.push(relDir);
+    }
     
     for (const entry of entries) {
         const srcPath = path.join(src, entry.name);
         const destPath = path.join(dest, entry.name);
         
         if (entry.isDirectory()) {
-            copied += copyDir(srcPath, destPath);
+            copied += copyDirWithManifest(srcPath, destPath, manifest, baseDir);
         } else {
             fs.copyFileSync(srcPath, destPath);
+            
+            // Track file in manifest
+            const relPath = path.relative(baseDir, destPath);
+            const hash = getFileHash(destPath);
+            const stats = fs.statSync(destPath);
+            
+            manifest.files[relPath] = {
+                hash: hash,
+                size: stats.size,
+                type: path.extname(entry.name).slice(1) || 'unknown'
+            };
+            
             copied++;
         }
     }
     return copied;
+}
+
+// Copy single file and track in manifest
+function copyFileWithManifest(src, dest, manifest, baseDir) {
+    fs.copyFileSync(src, dest);
+    
+    const relPath = path.relative(baseDir, dest);
+    const hash = getFileHash(dest);
+    const stats = fs.statSync(dest);
+    
+    manifest.files[relPath] = {
+        hash: hash,
+        size: stats.size,
+        type: path.extname(dest).slice(1) || 'unknown'
+    };
 }
 
 function removeDir(dir) {
@@ -393,40 +473,61 @@ async function uninstall(targetDir, autoYes = false, purgeMemory = false) {
     
     let totalRemoved = 0;
     
-    // Remove ALL dpt-*.md files from droids directory (not hardcoded list)
-    const droidsDir = path.join(targetDir, 'droids');
-    if (fs.existsSync(droidsDir)) {
-        const droidFiles = fs.readdirSync(droidsDir).filter(f => f.startsWith('dpt-') && f.endsWith('.md'));
-        for (const droidFile of droidFiles) {
-            const filePath = path.join(droidsDir, droidFile);
-            fs.unlinkSync(filePath);
-            log.success(`Removed ${droidFile}`);
-            totalRemoved++;
-        }
-        // Remove droids directory if empty
-        try {
-            const remaining = fs.readdirSync(droidsDir);
-            if (remaining.length === 0) {
-                fs.rmdirSync(droidsDir);
-                log.success('Removed empty droids directory');
+    // Load manifest for clean uninstall
+    const manifest = loadManifest(targetDir);
+    
+    if (manifest && manifest.files) {
+        // === MANIFEST-BASED UNINSTALL (CLEAN) ===
+        log.info('Using manifest for clean uninstall...');
+        
+        // Remove all tracked files
+        const files = Object.keys(manifest.files);
+        for (const relPath of files) {
+            const fullPath = path.join(targetDir, relPath);
+            if (fs.existsSync(fullPath)) {
+                try {
+                    fs.unlinkSync(fullPath);
+                    log.verbose(`Removed: ${relPath}`);
+                    totalRemoved++;
+                } catch (e) {
+                    log.warn(`Could not remove: ${relPath}`);
+                }
             }
-        } catch (e) { /* ignore */ }
-    }
-    
-    // Remove ALL droidpartment skills (scan directory)
-    const skillsDir = path.join(targetDir, 'skills');
-    const skillsToRemove = ['bug-sweep', 'codebase-analysis', 'memory', 'droidpartment'];
-    for (const skill of skillsToRemove) {
-        const skillDir = path.join(skillsDir, skill);
-        if (fs.existsSync(skillDir)) {
-            removeDir(skillDir);
-            try { fs.rmdirSync(skillDir); } catch (e) { /* ignore */ }
-            log.success(`Removed skill: ${skill}`);
-            totalRemoved++;
         }
+        log.success(`Removed ${totalRemoved} tracked files`);
+        
+        // Remove tracked directories (in reverse order - deepest first)
+        const dirs = [...(manifest.directories || [])].sort((a, b) => b.length - a.length);
+        let dirsRemoved = 0;
+        for (const relDir of dirs) {
+            const fullDir = path.join(targetDir, relDir);
+            if (fs.existsSync(fullDir)) {
+                try {
+                    const remaining = fs.readdirSync(fullDir);
+                    // Only remove if empty or only contains __pycache__
+                    if (remaining.length === 0 || 
+                        (remaining.length === 1 && remaining[0] === '__pycache__')) {
+                        if (remaining.includes('__pycache__')) {
+                            removeDir(path.join(fullDir, '__pycache__'));
+                            fs.rmdirSync(path.join(fullDir, '__pycache__'));
+                        }
+                        fs.rmdirSync(fullDir);
+                        dirsRemoved++;
+                    }
+                } catch (e) { /* ignore - not empty */ }
+            }
+        }
+        if (dirsRemoved > 0) {
+            log.success(`Removed ${dirsRemoved} directories`);
+        }
+    } else {
+        // No manifest found - cannot uninstall cleanly
+        log.error('No manifest found. Cannot determine installed files.');
+        log.error('Please reinstall Droidpartment first, then uninstall.');
+        return;
     }
     
-    // Remove hook registrations from Factory settings FIRST
+    // Remove hook registrations from Factory settings
     const settingsPath = path.join(process.env.HOME || process.env.USERPROFILE, '.factory', 'settings.json');
     try {
         if (fs.existsSync(settingsPath)) {
@@ -587,6 +688,14 @@ async function uninstall(targetDir, autoYes = false, purgeMemory = false) {
         totalRemoved++;
     }
     
+    // Remove manifest file
+    const manifestPath = path.join(targetDir, MANIFEST_FILE);
+    if (fs.existsSync(manifestPath)) {
+        fs.unlinkSync(manifestPath);
+        log.verbose('Removed manifest');
+        totalRemoved++;
+    }
+    
     // Remove version file
     const versionFile = path.join(targetDir, '.droidpartment-version');
     if (fs.existsSync(versionFile)) {
@@ -606,46 +715,58 @@ function update(targetDir, installedVersion) {
     console.log(`${COLORS.green}Available:${COLORS.reset} ${CURRENT_VERSION}`);
     console.log('');
     
-    // Update droids (overwrite all)
+    // Load old manifest to detect stale files
+    const oldManifest = loadManifest(targetDir);
+    
+    // Create new manifest
+    const newManifest = createManifest(CURRENT_VERSION);
+    if (oldManifest) {
+        newManifest.installedAt = oldManifest.installedAt; // Preserve original install date
+    }
+    
+    // Update droids with manifest tracking
     log.header('UPDATING AGENTS');
     const droidsSource = path.join(TEMPLATES_DIR, 'droids');
     const droidsTarget = path.join(targetDir, 'droids');
     ensureDir(droidsTarget);
-    const droidsCopied = copyDir(droidsSource, droidsTarget);
+    const droidsCopied = copyDirWithManifest(droidsSource, droidsTarget, newManifest, targetDir);
     log.success(`Updated ${droidsCopied} agent(s)`);
     
-    // Update skills
+    // Update skills with manifest tracking
     const skillsSource = path.join(TEMPLATES_DIR, 'skills');
     const skillsTarget = path.join(targetDir, 'skills');
     if (fs.existsSync(skillsSource)) {
         ensureDir(skillsTarget);
-        const skillsCopied = copyDir(skillsSource, skillsTarget);
+        const skillsCopied = copyDirWithManifest(skillsSource, skillsTarget, newManifest, targetDir);
         log.success(`Updated ${skillsCopied} skill file(s)`);
     }
     
-    // Update AGENTS.md (always update)
+    // Update AGENTS.md with manifest tracking
     const agentsMdSource = path.join(TEMPLATES_DIR, 'AGENTS.md');
     if (fs.existsSync(agentsMdSource)) {
         const agentsMdTarget = path.join(targetDir, 'AGENTS.md');
-        fs.copyFileSync(agentsMdSource, agentsMdTarget);
+        copyFileWithManifest(agentsMdSource, agentsMdTarget, newManifest, targetDir);
         log.success('Updated AGENTS.md orchestrator');
     }
     
-    // Update hooks (always update)
+    // Update hooks with manifest tracking
     log.header('UPDATING HOOKS');
     const hooksSource = path.join(TEMPLATES_DIR, 'hooks');
     const memoryTarget = path.join(targetDir, 'memory');
     const hooksTarget = path.join(memoryTarget, 'hooks');
+    newManifest.directories.push('memory');
+    newManifest.directories.push('memory/hooks');
+    
     if (fs.existsSync(hooksSource)) {
         ensureDir(hooksTarget);
-        const hooksCopied = copyDir(hooksSource, hooksTarget);
+        const hooksCopied = copyDirWithManifest(hooksSource, hooksTarget, newManifest, targetDir);
         log.success(`Updated ${hooksCopied} hooks`);
         
         // Re-register hooks in Factory settings
         registerHooks(hooksTarget);
     }
     
-    // Update Python modules (always update - these don't contain user data)
+    // Update Python modules with manifest tracking
     log.header('UPDATING PYTHON MODULES');
     const memorySource = path.join(TEMPLATES_DIR, 'memory');
     const pythonModules = ['context_index.py', 'workflow_state.py', 'shared_context.py'];
@@ -654,7 +775,7 @@ function update(targetDir, installedVersion) {
         const srcPath = path.join(memorySource, module);
         const destPath = path.join(memoryTarget, module);
         if (fs.existsSync(srcPath)) {
-            fs.copyFileSync(srcPath, destPath);
+            copyFileWithManifest(srcPath, destPath, newManifest, targetDir);
             modulesUpdated++;
         }
     }
@@ -662,8 +783,38 @@ function update(targetDir, installedVersion) {
         log.success(`Updated ${modulesUpdated} Python modules`);
     }
     
+    // === STALE FILE CLEANUP ===
+    // Remove files that were in old manifest but NOT in new manifest
+    if (oldManifest && oldManifest.files) {
+        const oldFiles = new Set(Object.keys(oldManifest.files));
+        const newFiles = new Set(Object.keys(newManifest.files));
+        
+        let staleRemoved = 0;
+        for (const oldFile of oldFiles) {
+            if (!newFiles.has(oldFile)) {
+                const fullPath = path.join(targetDir, oldFile);
+                if (fs.existsSync(fullPath)) {
+                    try {
+                        fs.unlinkSync(fullPath);
+                        log.verbose(`Removed stale: ${oldFile}`);
+                        staleRemoved++;
+                    } catch (e) { /* ignore */ }
+                }
+            }
+        }
+        if (staleRemoved > 0) {
+            log.success(`Removed ${staleRemoved} stale files from old version`);
+        }
+    }
+    
     // NOTE: We don't update memory YAML files to preserve learned data!
     log.info('Memory data preserved (lessons, patterns, mistakes kept)');
+    
+    // Save new manifest
+    newManifest.settingsModified = true;
+    newManifest.hooksRegistered = ['SessionStart', 'SubagentStop', 'PostToolUse', 'SessionEnd', 'PreToolUse', 'UserPromptSubmit'];
+    saveManifest(targetDir, newManifest);
+    log.success(`Manifest updated (${Object.keys(newManifest.files).length} files tracked)`);
     
     // Save new version
     saveVersion(targetDir, CURRENT_VERSION);
@@ -763,6 +914,9 @@ ${COLORS.reset}
 }
 
 function install(targetDir) {
+    // Create manifest to track all installed files
+    const manifest = createManifest(CURRENT_VERSION);
+    
     // Create directories
     const droidsTarget = path.join(targetDir, 'droids');
     const skillsTarget = path.join(targetDir, 'skills');
@@ -770,39 +924,42 @@ function install(targetDir) {
     ensureDir(droidsTarget);
     ensureDir(skillsTarget);
     
-    // Copy droids
+    // Copy droids with manifest tracking
     log.header('INSTALLING AGENTS');
     const droidsSource = path.join(TEMPLATES_DIR, 'droids');
-    const droidsCopied = copyDir(droidsSource, droidsTarget);
+    const droidsCopied = copyDirWithManifest(droidsSource, droidsTarget, manifest, targetDir);
     log.success(`Installed ${droidsCopied} agent(s)`);
     
-    // Copy skills
+    // Copy skills with manifest tracking
     const skillsSource = path.join(TEMPLATES_DIR, 'skills');
     if (fs.existsSync(skillsSource)) {
-        const skillsCopied = copyDir(skillsSource, skillsTarget);
+        const skillsCopied = copyDirWithManifest(skillsSource, skillsTarget, manifest, targetDir);
         log.success(`Installed ${skillsCopied} skill file(s)`);
     }
     
-    // Copy memory system
+    // Copy memory system with manifest tracking
     log.header('INSTALLING MEMORY SYSTEM');
     const memoryTarget = path.join(targetDir, 'memory');
     const memorySource = path.join(TEMPLATES_DIR, 'memory');
     ensureDir(memoryTarget);
     ensureDir(path.join(memoryTarget, 'projects')); // For per-project memories
+    manifest.directories.push('memory');
+    manifest.directories.push('memory/projects');
+    
     if (fs.existsSync(memorySource)) {
-        const memoryCopied = copyDir(memorySource, memoryTarget);
+        const memoryCopied = copyDirWithManifest(memorySource, memoryTarget, manifest, targetDir);
         log.success(`Installed global memory (${memoryCopied} files)`);
         log.info('Global: lessons.yaml, patterns.yaml, mistakes.yaml (shared across all projects)');
         log.info('Per-project: memory/projects/{project}/ (auto-created when needed)');
     }
     
-    // Copy hooks
+    // Copy hooks with manifest tracking
     log.header('INSTALLING FACTORY HOOKS');
     const hooksSource = path.join(TEMPLATES_DIR, 'hooks');
     const hooksTarget = path.join(memoryTarget, 'hooks');
     if (fs.existsSync(hooksSource)) {
         ensureDir(hooksTarget);
-        const hooksCopied = copyDir(hooksSource, hooksTarget);
+        const hooksCopied = copyDirWithManifest(hooksSource, hooksTarget, manifest, targetDir);
         log.success(`Installed ${hooksCopied} Factory hooks`);
         log.info('Hooks enable automatic:');
         log.info('  ✓ Memory initialization (SessionStart)');
@@ -876,15 +1033,23 @@ function install(targetDir) {
         log.warn('Could not register hooks: ' + e.message);
     }
     
-    // Copy AGENTS.md
+    // Copy AGENTS.md with manifest tracking
     const agentsMdSource = path.join(TEMPLATES_DIR, 'AGENTS.md');
     if (fs.existsSync(agentsMdSource)) {
         const agentsMdTarget = path.join(targetDir, 'AGENTS.md');
-        fs.copyFileSync(agentsMdSource, agentsMdTarget);
+        copyFileWithManifest(agentsMdSource, agentsMdTarget, manifest, targetDir);
         log.success('Installed AGENTS.md orchestrator');
     }
     
-    // Save version
+    // Mark settings as modified and track hooks
+    manifest.settingsModified = true;
+    manifest.hooksRegistered = ['SessionStart', 'SubagentStop', 'PostToolUse', 'SessionEnd', 'PreToolUse', 'UserPromptSubmit'];
+    
+    // Save manifest (THIS IS THE KEY - tracks everything we installed)
+    saveManifest(targetDir, manifest);
+    log.success(`Manifest saved (${Object.keys(manifest.files).length} files tracked)`);
+    
+    // Save version (legacy compatibility)
     saveVersion(targetDir, CURRENT_VERSION);
 
     // Summary
