@@ -38,7 +38,7 @@ _cache = {
 }
 
 def get_context_index():
-    """Get cached ContextIndex singleton."""
+    """Get cached ContextIndex singleton with lazy loading."""
     if _cache['context_index'] is None:
         try:
             from context_index import ContextIndex
@@ -46,6 +46,18 @@ def get_context_index():
         except:
             pass
     return _cache['context_index']
+
+def clear_cache(key: str = None):
+    """Clear specific cache entry or all if key is None."""
+    import gc
+    if key is None:
+        for k in list(_cache.keys()):
+            if not k.endswith('_dirty'):
+                _cache[k] = None
+        gc.collect()
+    elif key in _cache:
+        _cache[key] = None
+        gc.collect()
 
 def get_droid_stats():
     """Get cached droid stats."""
@@ -451,8 +463,22 @@ def main():
             save_all_caches()
             sys.exit(0)
         
-        # Extract agent info from transcript
-        agent = extract_agent_from_transcript(transcript_path)
+        # Get agent from SharedContext first (set by PreToolUse - more reliable)
+        agent = None
+        try:
+            from shared_context import SharedContext
+            sc = SharedContext()
+            agent = sc.context.get('agents', {}).get('current')
+            # Clear current agent since this one is now stopping
+            if agent:
+                sc.context['agents']['current'] = None
+                sc._save_context()
+        except:
+            pass
+        
+        # Fallback: Extract agent info from transcript (less reliable)
+        if not agent:
+            agent = extract_agent_from_transcript(transcript_path)
         next_agent = extract_next_agent_signal(transcript_path)
         
         # Record agent output and update state

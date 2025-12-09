@@ -5,6 +5,38 @@ All notable changes to Droidpartment are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.15] - 2025-12-09
+
+### 🛡️ Major Fixes + Performance + Cache Management
+
+**Learning Data Preservation:**
+- Learning files (`lessons.yaml`, `mistakes.yaml`, `patterns.yaml`) PRESERVED during reinstall/uninstall
+- User's accumulated knowledge never deleted unless `--purge` is used
+- Fixed YAML counter regex to handle indented entries (`  - id:`)
+
+**SharedContext Agent Handoff Fix:**
+- Agent names now recorded in PreToolUse (reliable) instead of SubagentStop transcript parsing (unreliable)
+- SharedContext stores `current` agent for proper handoffs
+- Fixed "unknown" agent issue in stats and handoffs
+
+**Agent Artifact Persistence:**
+- dpt-research now saves findings to `~/.factory/memory/projects/{project}/artifacts/RESEARCH.md`
+- All artifacts saved to factory memory, NOT user's project directory
+
+**Performance Optimization:**
+- All 6 hooks now use singleton cache with lazy loading
+- ContextIndex loaded once per hook (was 3-6 times)
+- Added `clear_cache()`, `invalidate_cache()` functions
+- Garbage collection hints after cache clear
+
+**New CacheManager Module:**
+- `templates/memory/cache_manager.py` - Enterprise-grade cache
+- TTL-based expiration, weak references, max size limits
+- Automatic cleanup of expired entries
+- Memory leak prevention with `gc.collect()`
+
+---
+
 ## [3.2.14] - 2025-12-09
 
 ### ⚡ Performance Optimization + Stats Fixes

@@ -30,16 +30,18 @@ memory_dir = Path(os.path.expanduser('~/.factory/memory'))
 sys.path.insert(0, str(memory_dir))
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# PERFORMANCE OPTIMIZATION: Singleton cache for expensive objects
+# PERFORMANCE OPTIMIZATION: Cache with lifecycle management
 # ═══════════════════════════════════════════════════════════════════════════════
 _cache = {
     'context_index': None,
     'tool_stats': None,
-    'tool_stats_dirty': False
+    'tool_stats_dirty': False,
+    'droid_stats': None,
+    'droid_stats_dirty': False
 }
 
 def get_context_index():
-    """Get cached ContextIndex singleton."""
+    """Get cached ContextIndex singleton with lazy loading."""
     if _cache['context_index'] is None:
         try:
             from context_index import ContextIndex
@@ -47,6 +49,29 @@ def get_context_index():
         except:
             pass
     return _cache['context_index']
+
+def clear_cache(key: str = None):
+    """Clear specific cache entry or all if key is None."""
+    import gc
+    if key is None:
+        for k in list(_cache.keys()):
+            if not k.endswith('_dirty'):
+                _cache[k] = None
+        gc.collect()
+    elif key in _cache:
+        _cache[key] = None
+        gc.collect()
+
+def save_all_caches():
+    """Save all dirty caches to disk."""
+    save_tool_stats()
+
+def invalidate_cache():
+    """Invalidate all caches (call at end of hook)."""
+    # Save dirty data first
+    save_all_caches()
+    # Then clear
+    clear_cache()
 
 def get_tool_stats():
     """Get cached tool stats."""
@@ -406,6 +431,26 @@ def main():
                     ctx.record_agent_call(cwd, agent, prompt)
                 except:
                     pass  # Silent fail
+            
+            # Record to SharedContext for agent handoffs
+            # This is MORE RELIABLE than SubagentStop transcript parsing
+            try:
+                from shared_context import SharedContext
+                sc = SharedContext()
+                # Record agent as started (output will be recorded in SubagentStop)
+                sc.context['agents']['last_agent'] = agent
+                sc.context['agents']['current'] = agent
+                # Initialize output entry so SubagentStop can find it
+                if 'outputs' not in sc.context['agents']:
+                    sc.context['agents']['outputs'] = {}
+                if agent not in sc.context['agents']['outputs']:
+                    sc.context['agents']['outputs'][agent] = {
+                        'started_at': datetime.now().isoformat(),
+                        'output': None
+                    }
+                sc._save_context()
+            except:
+                pass  # Silent fail
             
             # Show agent feedback (visible output)
             result = show_agent_feedback(tool_input, cwd)

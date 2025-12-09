@@ -27,6 +27,35 @@ from datetime import datetime
 memory_dir = Path(os.path.expanduser('~/.factory/memory'))
 sys.path.insert(0, str(memory_dir))
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# PERFORMANCE OPTIMIZATION: Singleton cache for expensive objects
+# ═══════════════════════════════════════════════════════════════════════════════
+_cache = {
+    'context_index': None
+}
+
+def get_context_index():
+    """Get cached ContextIndex singleton with lazy loading."""
+    if _cache['context_index'] is None:
+        try:
+            from context_index import ContextIndex
+            _cache['context_index'] = ContextIndex()
+        except:
+            pass
+    return _cache['context_index']
+
+def clear_cache(key: str = None):
+    """Clear specific cache entry or all if key is None."""
+    import gc
+    if key is None:
+        for k in list(_cache.keys()):
+            _cache[k] = None
+        gc.collect()
+    elif key in _cache:
+        _cache[key] = None
+        gc.collect()
+
+
 def save_session_summary():
     """Save session summary to history."""
     try:
@@ -234,13 +263,13 @@ def save_session_for_resume(session_id: str, reason: str):
         except:
             pass
         
-        # Get current project
-        try:
-            from context_index import ContextIndex
-            ci = ContextIndex()
-            session_state['project_path'] = ci.index.get('current_project')
-        except:
-            pass
+        # Get current project (use cached)
+        ci = get_context_index()
+        if ci:
+            try:
+                session_state['project_path'] = ci.index.get('current_project')
+            except:
+                pass
         
         # Get files modified in this session
         files_modified_file = memory_dir / 'files_modified.json'
@@ -310,24 +339,24 @@ def save_delta_summary():
             'modified_list': modified[:20]
         }
         
-        # Save to project memory if available
-        try:
-            from context_index import ContextIndex
-            ci = ContextIndex()
-            current_project = ci.index.get('current_project')
-            
-            if current_project:
-                project_name = Path(current_project).name
-                project_memory_dir = memory_dir / 'projects' / f"{project_name}_{hash(current_project) % 10000}"
-                changes_dir = project_memory_dir / 'changes'
-                changes_dir.mkdir(parents=True, exist_ok=True)
+        # Save to project memory if available (use cached)
+        ci = get_context_index()
+        if ci:
+            try:
+                current_project = ci.index.get('current_project')
                 
-                # Save delta
-                delta_file = changes_dir / f"delta_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-                with open(delta_file, 'w') as f:
-                    json.dump(delta_summary, f, indent=2)
-        except:
-            pass
+                if current_project:
+                    project_name = Path(current_project).name
+                    project_memory_dir = memory_dir / 'projects' / f"{project_name}_{hash(current_project) % 10000}"
+                    changes_dir = project_memory_dir / 'changes'
+                    changes_dir.mkdir(parents=True, exist_ok=True)
+                    
+                    # Save delta
+                    delta_file = changes_dir / f"delta_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+                    with open(delta_file, 'w') as f:
+                        json.dump(delta_summary, f, indent=2)
+            except:
+                pass
         
     except:
         pass
@@ -342,13 +371,13 @@ def main():
         reason = input_data.get('reason', 'exit')
         cwd = input_data.get('cwd', os.getcwd())
         
-        # End project-specific session tracking
-        try:
-            from context_index import ContextIndex
-            ctx = ContextIndex()
-            ctx.end_session(cwd, session_id)
-        except:
-            pass  # Silent fail
+        # End project-specific session tracking (use cached)
+        ctx = get_context_index()
+        if ctx:
+            try:
+                ctx.end_session(cwd, session_id)
+            except:
+                pass  # Silent fail
         
         # Save session summary
         save_session_summary()

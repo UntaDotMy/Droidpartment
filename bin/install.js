@@ -147,7 +147,21 @@ function copyDirWithManifest(src, dest, manifest, baseDir) {
         if (entry.isDirectory()) {
             copied += copyDirWithManifest(srcPath, destPath, manifest, baseDir);
         } else {
-            fs.copyFileSync(srcPath, destPath);
+            // DON'T overwrite learning files if they exist (preserve user data)
+            const learningFiles = ['lessons.yaml', 'mistakes.yaml', 'patterns.yaml', 'stats.yaml'];
+            const isLearningFile = learningFiles.includes(entry.name);
+            
+            if (isLearningFile && fs.existsSync(destPath)) {
+                // Skip - preserve existing learning data
+                // But still track in manifest
+                const relPath = path.relative(baseDir, destPath);
+                const hash = getFileHash(destPath);
+                const stats = fs.statSync(destPath);
+                manifest.files[relPath] = { hash, size: stats.size, type: 'yaml' };
+            } else {
+                fs.copyFileSync(srcPath, destPath);
+                copied++;
+            }
             
             // Track file in manifest
             const relPath = path.relative(baseDir, destPath);
@@ -159,8 +173,6 @@ function copyDirWithManifest(src, dest, manifest, baseDir) {
                 size: stats.size,
                 type: path.extname(entry.name).slice(1) || 'unknown'
             };
-            
-            copied++;
         }
     }
     return copied;
@@ -232,7 +244,8 @@ function countYamlEntries(filePath) {
     if (!fs.existsSync(filePath)) return 0;
     try {
         const content = fs.readFileSync(filePath, 'utf8');
-        const matches = content.match(/- id:/gm);
+        // Match "- id:" with optional leading whitespace
+        const matches = content.match(/^\s*- id:/gm);
         return matches ? matches.length : 0;
     } catch {
         return 0;
@@ -501,9 +514,25 @@ async function uninstall(targetDir, autoYes = false, purgeMemory = false) {
         // === MANIFEST-BASED UNINSTALL (CLEAN) ===
         log.info('Using manifest for clean uninstall...');
         
-        // Remove all tracked files
+        // Files to PRESERVE (user's learning data) - never delete these
+        const preserveFiles = [
+            'memory/lessons.yaml',
+            'memory/mistakes.yaml', 
+            'memory/patterns.yaml',
+            'memory/stats.yaml'
+        ];
+        
+        // Remove all tracked files EXCEPT learning data
         const files = Object.keys(manifest.files);
+        let preserved = 0;
         for (const relPath of files) {
+            // Skip learning files - preserve user data
+            if (preserveFiles.some(p => relPath.endsWith(p.replace('memory/', '')))) {
+                log.verbose(`Preserved: ${relPath} (learning data)`);
+                preserved++;
+                continue;
+            }
+            
             const fullPath = path.join(targetDir, relPath);
             if (fs.existsSync(fullPath)) {
                 try {
@@ -516,6 +545,9 @@ async function uninstall(targetDir, autoYes = false, purgeMemory = false) {
             }
         }
         log.success(`Removed ${totalRemoved} tracked files`);
+        if (preserved > 0) {
+            log.info(`Preserved ${preserved} learning files (lessons, mistakes, patterns)`);
+        }
         
         // Remove tracked directories (in reverse order - deepest first)
         const dirs = [...(manifest.directories || [])].sort((a, b) => b.length - a.length);

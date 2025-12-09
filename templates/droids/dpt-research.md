@@ -57,29 +57,46 @@ When a single search isn't enough, use iterative research:
 
 ## Output Format
 
-```
-Summary: Research complete - X sources, Y hops, Z practices found
+**IMPORTANT:** Always SAVE your research findings to a file so other agents can access them!
 
-Findings:
-- [0.95] JWT best practices (RFC 7519): Use short expiry, rotate keys
-  - Source: https://...
-  - Hop: 1 (initial)
-- [0.85] React state patterns (React docs + Kent C. Dodds)
-  - Source: https://react.dev/...
-  - Hop: 2 (entity expansion from React docs)
-- [0.70] Performance optimization (verified community)
-  - Source: https://...
-  - Hop: 3 (depth from patterns)
+1. **Save to file** - Create `RESEARCH.md` in project memory (NOT user's project):
+   ```
+   ~/.factory/memory/projects/{project}/artifacts/RESEARCH.md
+   ```
+   
+   **Never save to user's project directory** - all artifacts go to ~/.factory/memory/
 
-Research Depth:
-- Hops completed: 3
-- Total sources: 8
-- Average confidence: 0.83
+2. **Return summary** in your output:
+   ```
+   Summary: Research complete - X sources, Y hops, Z practices found
+   Saved to: RESEARCH.md
+   
+   Findings:
+   - [0.95] JWT best practices (RFC 7519): Use short expiry, rotate keys
+     - Source: https://...
+     - Hop: 1 (initial)
+   - [0.85] React state patterns (React docs + Kent C. Dodds)
+     - Source: https://react.dev/...
+     - Hop: 2 (entity expansion from React docs)
+   - [0.70] Performance optimization (verified community)
+     - Source: https://...
+     - Hop: 3 (depth from patterns)
+   
+   Research Depth:
+   - Hops completed: 3
+   - Total sources: 8
+   - Average confidence: 0.83
+   
+   Follow-up:
+   - next_agent: dpt-arch (or dpt-dev)
+   - confidence: 85
+   ```
 
-Follow-up:
-- next_agent: dpt-arch (or dpt-dev)
-- confidence: 85
-```
+**Why save to ~/.factory/memory/?**
+- Other agents can read your findings via artifacts/
+- Findings persist across agent handoffs
+- User's project directory stays clean
+- All Droidpartment data in one place
 
 ## What NOT To Do
 

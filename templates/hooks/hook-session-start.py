@@ -26,17 +26,44 @@ from datetime import datetime
 memory_dir = Path(os.path.expanduser('~/.factory/memory'))
 sys.path.insert(0, str(memory_dir))
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# PERFORMANCE OPTIMIZATION: Singleton cache for expensive objects
+# ═══════════════════════════════════════════════════════════════════════════════
+_cache = {
+    'context_index': None
+}
+
+def get_context_index():
+    """Get cached ContextIndex singleton with lazy loading."""
+    if _cache['context_index'] is None:
+        try:
+            from context_index import ContextIndex
+            _cache['context_index'] = ContextIndex()
+        except:
+            pass
+    return _cache['context_index']
+
+def clear_cache(key: str = None):
+    """Clear specific cache entry or all if key is None."""
+    import gc
+    if key is None:
+        for k in list(_cache.keys()):
+            _cache[k] = None
+        gc.collect()
+    elif key in _cache:
+        _cache[key] = None
+        gc.collect()
+
+
 def discover_environment():
-    """Discover environment using context_index module."""
-    try:
-        from context_index import ContextIndex
-        ci = ContextIndex()
-        return ci.discover_environment()
-    except ImportError:
-        # Fallback if module not available
-        return discover_environment_fallback()
-    except Exception as e:
-        return {'error': str(e)}
+    """Discover environment using context_index module (cached)."""
+    ci = get_context_index()
+    if ci:
+        try:
+            return ci.discover_environment()
+        except:
+            pass
+    return discover_environment_fallback()
 
 def discover_environment_fallback():
     """Fallback environment discovery without module."""
@@ -134,10 +161,11 @@ def initialize_project_memory(cwd):
     Creates project folder, indexes structure, saves STRUCTURE.md.
     Returns initialization info and project index.
     """
+    ci = get_context_index()
+    if not ci:
+        return None
+    
     try:
-        from context_index import ContextIndex
-        ci = ContextIndex()
-        
         # Check if this is first time for this project
         is_first_time = not ci.is_project_indexed(cwd)
         
@@ -158,13 +186,14 @@ def initialize_project_memory(cwd):
         return None
 
 def get_recent_mistakes(cwd, limit=3):
-    """Get recent mistakes to warn agents."""
-    try:
-        from context_index import ContextIndex
-        ci = ContextIndex()
-        return ci.get_recent_mistakes(cwd, limit)
-    except:
-        return []
+    """Get recent mistakes to warn agents (cached)."""
+    ci = get_context_index()
+    if ci:
+        try:
+            return ci.get_recent_mistakes(cwd, limit)
+        except:
+            pass
+    return []
 
 
 def check_resumable_session(cwd):
@@ -234,9 +263,11 @@ def get_resume_context(resume_data):
 
 def get_project_files_summary(cwd):
     """Get file targeting info for agents (no ls needed)."""
+    ci = get_context_index()
+    if not ci:
+        return None
+    
     try:
-        from context_index import ContextIndex
-        ci = ContextIndex()
         project_index = ci.load_project_index(cwd)
         
         if not project_index:
@@ -342,13 +373,13 @@ def main():
         # Initialize project memory (first-time: creates folder, STRUCTURE.md, files.json)
         project_init = initialize_project_memory(cwd)
         
-        # Start project-specific session tracking
-        try:
-            from context_index import ContextIndex
-            ctx = ContextIndex()
-            ctx.start_session(cwd, session_id)
-        except:
-            pass  # Silent fail
+        # Start project-specific session tracking (use cached)
+        ctx = get_context_index()
+        if ctx:
+            try:
+                ctx.start_session(cwd, session_id)
+            except:
+                pass  # Silent fail
         
         # Get recent mistakes to warn agents
         mistakes = get_recent_mistakes(cwd, limit=3)
@@ -367,7 +398,7 @@ def main():
             additional_context = f"{resume_context} {additional_context}"
         
         # Add Droidpartment INSTRUCTION (not just banner)
-        version = "3.2.14"
+        version = "3.2.15"
         
         # Check if this is a NEW project (not yet in memory)
         is_new_project = project_init and project_init.get('is_first_time', False)
