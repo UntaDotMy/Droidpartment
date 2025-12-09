@@ -40,7 +40,7 @@ Read("~/.factory/memory/context_index.json")
 If issues require revision, use `needs_revision: true` to trigger another iteration:
 
 ```
-revision_needed: true
+needs_revision: true
 revision_reason: "Over-engineering in auth module needs simplification"
 revision_agent: dpt-dev
 ```
@@ -50,6 +50,24 @@ This creates a **feedback loop** where:
 2. Signals revision needed
 3. dpt-dev is called again to fix
 4. dpt-review verifies (loop until approved)
+
+## Loop / Iteration Support
+
+If you expect **multiple refinement rounds** (brainstorm mode), also signal an iteration loop in your follow-up block so the system keeps iterating until the issues are fixed or the max iteration count is reached:
+
+```
+Follow-up:
+- next_agent: dpt-dev
+- needs_revision: true
+- revision_reason: "Simplify factory.ts and config.ts"
+- start_loop: true
+- loop_topic: "Simplify over-engineered modules"
+```
+
+This will:
+1. Trigger the brainstorm/iteration loop managed by the workflow state
+2. Alternate between dpt-dev (fixes) and dpt-review (verification)
+3. Stop automatically when issues are resolved or the safe iteration limit is reached
 
 ## Output Format
 

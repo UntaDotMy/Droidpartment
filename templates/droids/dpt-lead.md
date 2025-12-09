@@ -55,10 +55,22 @@ Follow-up:
 
 ## Loop Support
 
-If iterating on review:
-1. Re-review after fixes
-2. Check if issues resolved
-3. Approve or continue
+If iterating on review (multiple fix/verify rounds), use the same revision and loop signals as other review agents so the hooks can manage the loop safely:
+
+```
+Follow-up:
+- next_agent: dpt-dev
+- needs_revision: true
+- revision_reason: "Fix issues found in code review"
+- revision_agent: dpt-dev
+- start_loop: true
+- loop_topic: "Refine implementation based on lead review"
+```
+
+This will:
+1. Request a revision from dpt-dev
+2. Start the brainstorm/iteration loop in the workflow state
+3. Keep alternating between dpt-dev (fixes) and review agents until issues are resolved or the safe iteration limit is reached
 
 ## What NOT To Do
 

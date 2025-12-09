@@ -165,11 +165,124 @@ def should_continue_loop():
             pass
     return False
 
+def parse_agent_signals(transcript_path, agent):
+    """Parse agent output for control signals (revision, plan, loop, etc.)."""
+    signals = {
+        'needs_revision': False,
+        'revision_reason': None,
+        'revision_agent': None,
+        'next_agent': None,
+        'next_agents': [],
+        'plan': None,
+        'start_loop': False,
+        'loop_topic': None
+    }
+    
+    if not transcript_path:
+        return signals
+    
+    try:
+        content = Path(transcript_path).read_text(errors='ignore')
+        recent = content[-5000:]  # Check last 5KB for signals
+        
+        # Check for revision signals
+        if re.search(r'needs_revision:\s*true', recent, re.IGNORECASE):
+            signals['needs_revision'] = True
+            
+            # Extract reason
+            match = re.search(r'revision_reason:\s*["\']?([^"\'}\n]+)', recent, re.IGNORECASE)
+            if match:
+                signals['revision_reason'] = match.group(1).strip()[:200]
+            
+            # Extract target agent
+            match = re.search(r'revision_agent:\s*["\']?([^"\'}\n,]+)', recent, re.IGNORECASE)
+            if match:
+                signals['revision_agent'] = match.group(1).strip()
+        
+        # Check for next_agent signal
+        match = re.search(r'next_agent:\s*["\']?([^"\'}\n,\]]+)', recent, re.IGNORECASE)
+        if match:
+            signals['next_agent'] = match.group(1).strip()
+        
+        # Check for next_agents array (parallel)
+        match = re.search(r'next_agents:\s*\[([^\]]+)\]', recent, re.IGNORECASE)
+        if match:
+            agents_str = match.group(1)
+            signals['next_agents'] = [a.strip().strip('"\'') for a in agents_str.split(',') if a.strip()]
+        
+        # Check for plan (from dpt-scrum)
+        if agent == 'dpt-scrum':
+            # Try to extract wave plan
+            plan_match = re.search(r'"plan":\s*\[(.+?)\]', recent, re.DOTALL)
+            if plan_match:
+                try:
+                    plan_json = '[' + plan_match.group(1) + ']'
+                    signals['plan'] = json.loads(plan_json)
+                except:
+                    pass
+        
+        # Check for loop/brainstorm signals
+        if re.search(r'start_loop:\s*true|brainstorm:\s*true', recent, re.IGNORECASE):
+            signals['start_loop'] = True
+            match = re.search(r'loop_topic:\s*["\']?([^"\'}\n]+)', recent, re.IGNORECASE)
+            if match:
+                signals['loop_topic'] = match.group(1).strip()
+    
+    except:
+        pass
+    
+    return signals
+
+
+def apply_agent_signals(signals):
+    """Apply parsed signals to SharedContext and WorkflowState."""
+    try:
+        from shared_context import SharedContext
+        sc = SharedContext()
+        
+        # Apply revision signal
+        if signals.get('needs_revision') and signals.get('revision_agent'):
+            if sc.can_revise():
+                sc.request_revision(
+                    signals.get('revision_reason', 'Revision requested'),
+                    signals.get('revision_agent')
+                )
+        
+        # Apply plan if from dpt-scrum
+        if signals.get('plan'):
+            sc.set_plan(signals['plan'])
+        
+        # Apply next_agent handoff
+        if signals.get('next_agent'):
+            sc.context['agents']['next_agent'] = signals['next_agent']
+            sc._save_context()
+        
+        if signals.get('next_agents'):
+            sc.context['agents']['next_agents'] = signals['next_agents']
+            sc.context['agents']['handoff_type'] = 'parallel'
+            sc._save_context()
+        
+        # Apply loop signal
+        if signals.get('start_loop'):
+            from workflow_state import WorkflowState
+            ws = WorkflowState()
+            ws.start_brainstorm(signals.get('loop_topic', 'refinement'))
+    
+    except ImportError:
+        pass
+    except:
+        pass
+
+
 def record_agent_output(agent, transcript_path):
     """Record agent output to shared context with full content extraction."""
     try:
         from shared_context import SharedContext
         sc = SharedContext()
+        
+        # Parse and apply agent signals FIRST
+        signals = parse_agent_signals(transcript_path, agent)
+        apply_agent_signals(signals)
         
         # Extract full output from transcript
         output = None
@@ -320,6 +433,48 @@ def update_session_state(agent):
         _cache['session_dirty'] = True
     except:
         pass
+
+
+def update_wave_progress(agent):
+    """Update wave progress in SharedContext - mark agent complete and advance waves."""
+    try:
+        from shared_context import SharedContext
+        sc = SharedContext()
+        
+        if agent:
+            # Mark this agent as complete in current wave
+            sc.mark_agent_complete(agent)
+            
+            # Get wave status for logging
+            current_wave = sc.get_current_wave()
+            plan = sc.get_plan()
+            
+            if plan:
+                wave_info = None
+                for w in plan:
+                    if w.get('wave') == current_wave:
+                        wave_info = w
+                        break
+                
+                if wave_info:
+                    completed = sc.context['agents'].get('completed', [])
+                    wave_agents = wave_info.get('agents', [])
+                    phase = wave_info.get('phase', 'UNKNOWN')
+                    
+                    # Return wave progress info
+                    return {
+                        'current_wave': current_wave,
+                        'phase': phase,
+                        'completed': completed,
+                        'remaining': [a for a in wave_agents if a not in completed],
+                        'wave_complete': sc.is_wave_complete()
+                    }
+    except ImportError:
+        pass
+    except:
+        pass
+    return None
+
 
 def extract_mistakes_from_transcript(transcript_path, agent):
     """Extract mistakes mentioned in agent output."""
@@ -535,6 +690,9 @@ def main():
         update_droid_stats(agent)
         update_session_state(agent)
         
+        # Update wave progress (marks agent complete, auto-advances waves)
+        wave_progress = update_wave_progress(agent)
+        
         # Extract and record any mistakes from agent output (PROJECT-SPECIFIC)
         mistakes = extract_mistakes_from_transcript(transcript_path, agent)
         if mistakes:
@@ -568,6 +726,40 @@ def main():
             print(json.dumps(output))
             save_all_caches()
             sys.exit(0)
+        
+        # ============= REVISION SYSTEM =============
+        # Check if revision was requested by an agent
+        try:
+            from shared_context import SharedContext
+            sc = SharedContext()
+            if sc.needs_revision():
+                revision_info = sc.get_revision_info()
+                revision_agent = revision_info.get('revision_agent', 'dpt-dev')
+                revision_reason = revision_info.get('revision_reason', 'Issues found')
+                revision_count = revision_info.get('revision_count', 1)
+                max_revisions = revision_info.get('max_revisions', 3)
+                
+                # Clear revision flag so we don't loop forever
+                sc.clear_revision()
+                
+                output = {
+                    "decision": "block",
+                    "reason": f"""
+⚠️ REVISION REQUIRED ({revision_count}/{max_revisions})
+
+Reason: {revision_reason}
+
+Action: Call Task(subagent_type: "{revision_agent}", prompt: "Fix: {revision_reason}")
+
+After fix, the review agent will verify the changes.
+"""
+                }
+                print(json.dumps(output))
+                save_all_caches()
+                sys.exit(0)
+        except:
+            pass
+        # ============================================
         
         # Check if next_agent was signaled
         if next_agent and next_agent != agent:

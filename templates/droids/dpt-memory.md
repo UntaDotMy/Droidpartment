@@ -30,12 +30,21 @@ When called with "START: Initialize new project" or on a project not in memory:
    ```
 
 3. **Create project memory:**
+   
+   **The memory path is in your context** - look for `[Artifacts: ...]` at session start.
+   Use the PARENT directory of artifacts for memory files.
+   
+   Example: If `[Artifacts: /Users/john/.factory/memory/projects/myapp_abc123/artifacts]`
+   Then write to: `/Users/john/.factory/memory/projects/myapp_abc123/`
+   
    ```
-   ~/.factory/memory/projects/{project_name}/
+   {memory_path}/
    ├── STRUCTURE.md    # Project structure summary
    ├── patterns.yaml   # Project-specific patterns
    └── mistakes.yaml   # Project-specific mistakes
    ```
+   
+   **⚠️ Use EXACT absolute path from context - NEVER use ~ or relative paths**
 
 4. **Output summary for other agents:**
    ```
@@ -62,19 +71,23 @@ When called with "START: Initialize new project" or on a project not in memory:
 When called with "START" (on existing project):
 
 1. Read the task description
-2. Search memory files for RELEVANT lessons:
+2. Get memory path from your context - look for `[Artifacts: ...]`
+   Remove `/artifacts` from the end to get the project memory directory.
+3. Search memory files for RELEVANT lessons:
    ```
-   # PROJECT-SPECIFIC (check first - more relevant):
-   ~/.factory/memory/projects/{project_name}/lessons.yaml
-   ~/.factory/memory/projects/{project_name}/patterns.yaml  
-   ~/.factory/memory/projects/{project_name}/mistakes.yaml
+   # PROJECT-SPECIFIC (use path from context):
+   {project_memory_path}/lessons.yaml
+   {project_memory_path}/patterns.yaml  
+   {project_memory_path}/mistakes.yaml
    
-   # GLOBAL (cross-project learnings):
-   ~/.factory/memory/lessons.yaml   - Universal learnings
-   ~/.factory/memory/patterns.yaml  - Universal patterns
-   ~/.factory/memory/mistakes.yaml  - Universal mistakes
+   # GLOBAL (parent of project path):
+   {parent_memory_path}/lessons.yaml   - Universal learnings
+   {parent_memory_path}/patterns.yaml  - Universal patterns
+   {parent_memory_path}/mistakes.yaml  - Universal mistakes
    ```
-3. Return ONLY lessons relevant to THIS task (not all lessons)
+4. Return ONLY lessons relevant to THIS task (not all lessons)
+
+**⚠️ Use EXACT absolute paths from context - NEVER use ~ or relative paths**
 
 **Output format:**
 ```

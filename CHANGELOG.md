@@ -5,6 +5,47 @@ All notable changes to Droidpartment are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.17] - 2025-12-09
+
+### 🌊 Wave Orchestration + Loop System Fully Wired
+
+**Wave Execution System:**
+- `SharedContext.set_plan()` now stores wave execution plans from dpt-scrum
+- `mark_agent_complete()` tracks agent completion per wave
+- `is_wave_complete()` checks if all wave agents finished
+- `advance_wave()` auto-advances to next wave when complete
+- SessionStart injects `[Wave: 2/6 (PLAN) | Completed: ... | Pending: ...]`
+
+**Signal Parsing in SubagentStop:**
+- New `parse_agent_signals()` extracts control signals from agent output:
+  - `needs_revision: true` → triggers revision loop
+  - `revision_agent`, `revision_reason` → targets specific agent
+  - `next_agent`, `next_agents` → handoff signals
+  - `plan: [...]` → wave plan from dpt-scrum
+  - `start_loop: true`, `loop_topic` → brainstorm mode
+- New `apply_agent_signals()` applies parsed signals to SharedContext/WorkflowState
+
+**Revision Loop:**
+- SubagentStop now detects `needs_revision` and emits `decision: "block"` with explicit `Task(...)` instruction
+- Tracks revision count with `max_revisions` cap (default 3)
+- Auto-clears revision flag after emitting instruction
+
+**Brainstorm/Iteration Loop:**
+- `start_loop: true` signal activates `WorkflowState.start_brainstorm()`
+- `should_continue_loop()` keeps iterating until resolved or max reached
+- Loop status shown in context: `[Loop: 1/5]`
+
+**Agent Documentation Updates:**
+- `dpt-review.md`: Fixed `revision_needed` → `needs_revision`, added Loop/Iteration Support section
+- `dpt-lead.md`: Added Loop Support with `needs_revision`, `start_loop`, `loop_topic` examples
+- Both now show how to trigger revision + brainstorm loops
+
+**Context Injection:**
+- SessionStart now shows `[MemoryRoot: path]` in addition to `[Artifacts: path]`
+- Wave progress injected when plan exists
+
+---
+
 ## [3.2.16] - 2025-12-09
 
 ### 🔧 Agent Improvements + Factory CLI Compliance

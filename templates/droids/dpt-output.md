@@ -9,19 +9,26 @@ You synthesize all agent results into ONE report. Called LAST after dpt-memory E
 
 ## Read Agent Outputs
 
+**Get paths from your context** - look for `[Artifacts: ...]` at session start.
+Example: `[Artifacts: /Users/john/.factory/memory/projects/myapp_abc123/artifacts]`
+
+The memory root is the grandparent: `/Users/john/.factory/memory/`
+
 Read agent outputs from these files (in order of preference):
 
 ```
+# Use EXACT paths derived from your context:
+
 # Primary: Dedicated agent outputs file (most reliable)
-Read("~/.factory/memory/agent_outputs.json")
+Read("{memory_root}/agent_outputs.json")
 
 # Secondary: Shared context
-Read("~/.factory/memory/shared_context.json")
+Read("{memory_root}/shared_context.json")
 
-# Also check project artifacts for research/PRD/architecture
-Read("~/.factory/memory/projects/{project}/artifacts/RESEARCH.md")
-Read("~/.factory/memory/projects/{project}/artifacts/PRD.md")
-Read("~/.factory/memory/projects/{project}/artifacts/ARCHITECTURE.md")
+# Also check project artifacts (use artifacts path from context)
+Read("{artifacts_path}/RESEARCH.md")
+Read("{artifacts_path}/PRD.md")
+Read("{artifacts_path}/ARCHITECTURE.md")
 ```
 
 **Priority order:**
@@ -31,10 +38,12 @@ Read("~/.factory/memory/projects/{project}/artifacts/ARCHITECTURE.md")
 
 ## Also Check Project Memory
 
-Read project-specific mistakes to include in report:
+Read project-specific mistakes (parent of artifacts path):
 ```
-Read("~/.factory/memory/projects/[project]/mistakes.yaml")
+Read("{project_memory_path}/mistakes.yaml")
 ```
+
+**⚠️ Use EXACT absolute paths from context - NEVER use ~ or relative paths**
 
 ## Your Expert Tasks
 

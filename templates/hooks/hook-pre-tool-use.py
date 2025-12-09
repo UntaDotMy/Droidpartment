@@ -223,6 +223,35 @@ def validate_file_tool(tool_input: dict, tool_name: str) -> dict:
     """Validate file operation tools (Write, Edit, Create)."""
     file_path = tool_input.get('file_path', '') or tool_input.get('path', '')
     
+    # ARTIFACT PATH REDIRECTION
+    # If agent is trying to save to .factory/memory in PROJECT dir, redirect to USER home
+    if '.factory/memory' in file_path or '.factory\\memory' in file_path:
+        # Get correct home-based memory dir
+        correct_memory = os.path.expanduser('~/.factory/memory')
+        
+        # Check if path is NOT under user's home (wrong location)
+        normalized_path = os.path.normpath(file_path)
+        correct_memory_norm = os.path.normpath(correct_memory)
+        
+        if not normalized_path.startswith(correct_memory_norm):
+            # Extract the relative part after .factory/memory
+            match = re.search(r'[.]factory[/\\]memory[/\\](.+)$', file_path)
+            if match:
+                relative_part = match.group(1)
+                corrected_path = os.path.join(correct_memory, relative_part).replace('\\', '/')
+                
+                # Return with updatedInput to redirect the path
+                return {
+                    "hookSpecificOutput": {
+                        "hookEventName": "PreToolUse",
+                        "permissionDecision": "allow",
+                        "permissionDecisionReason": f"Redirected artifact to correct location: {corrected_path}",
+                        "updatedInput": {
+                            "file_path": corrected_path
+                        }
+                    }
+                }
+    
     # Check for protected files
     if is_protected_file(file_path):
         return {

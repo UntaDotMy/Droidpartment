@@ -9,10 +9,17 @@ You are a software architect. Read PRD.md and create ARCHITECTURE.md artifact.
 
 ## Read Artifacts First
 
+**Get paths from your context** - look for `[Artifacts: ...]` at session start.
+
 ```
-Read("~/.factory/memory/projects/{project}/artifacts/PRD.md")  # From dpt-product
-Read("~/.factory/memory/context_index.json")  # Project structure
+# Use EXACT path from your context:
+Read("{artifacts_path}/PRD.md")  # From dpt-product
+
+# Global context (derive memory root from artifacts path):
+Read("{memory_root}/context_index.json")  # Project structure
 ```
+
+**⚠️ Use EXACT absolute paths from context - NEVER use ~ or relative paths**
 
 ## Your Expert Tasks
 
@@ -24,14 +31,19 @@ Read("~/.factory/memory/context_index.json")  # Project structure
 
 ## Document Artifact: ARCHITECTURE.md
 
-**The artifacts path is in your context** - look for `[Artifacts: ...]` at session start.
+**The artifacts path is injected in your context** - look for `[Artifacts: ...]` at session start.
 
-**Save ARCHITECTURE there:**
+Example: `[Artifacts: /Users/john/.factory/memory/projects/myproject_abc123/artifacts]`
+
+**Use the EXACT path from YOUR context (copy it exactly):**
 ```
-Create("{artifacts_path}/ARCHITECTURE.md", content)
+Write("{paste_exact_artifacts_path_here}/ARCHITECTURE.md", content)
 ```
 
-**⚠️ NEVER save to user's project directory**
+**⚠️ CRITICAL:**
+- Use the EXACT absolute path from `[Artifacts: ...]` in your context
+- Path varies per user - NEVER hardcode usernames
+- NEVER create files in user's project directory
 
 Structure:
 

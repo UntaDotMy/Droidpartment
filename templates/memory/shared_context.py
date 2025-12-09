@@ -185,10 +185,71 @@ class SharedContext:
         return self.context['workflow'].get('current_wave', 0)
     
     def is_wave_complete(self) -> bool:
-        """Check if current wave is complete."""
-        current = self.context['workflow'].get('current_wave', 0)
+        """Check if current wave is complete (all agents in wave have run)."""
+        plan = self.context['workflow'].get('plan', [])
+        current_wave = self.context['workflow'].get('current_wave', 0)
+        completed = self.context['agents'].get('completed', [])
+        
+        # Find agents for current wave
+        for wave_info in plan:
+            if wave_info.get('wave') == current_wave:
+                wave_agents = wave_info.get('agents', [])
+                # Check if all wave agents have completed
+                return all(agent in completed for agent in wave_agents)
+        
+        # Fallback to simple check
         total = self.context['workflow'].get('total_waves', 0)
-        return current >= total
+        return current_wave >= total
+    
+    def set_plan(self, plan: List[Dict]):
+        """Set the execution plan from dpt-scrum.
+        
+        Plan format: [
+            {"wave": 1, "phase": "INIT", "agents": ["dpt-research", "dpt-memory"], "parallel": True},
+            {"wave": 2, "phase": "PLAN", "agents": ["dpt-product"], "parallel": False},
+            ...
+        ]
+        """
+        self.context['workflow']['plan'] = plan
+        self.context['workflow']['total_waves'] = len(plan)
+        self.context['workflow']['current_wave'] = 1
+        self._save_context()
+    
+    def get_plan(self) -> List[Dict]:
+        """Get the execution plan."""
+        return self.context['workflow'].get('plan', [])
+    
+    def get_current_wave_agents(self) -> List[str]:
+        """Get agents for current wave."""
+        plan = self.context['workflow'].get('plan', [])
+        current_wave = self.context['workflow'].get('current_wave', 0)
+        
+        for wave_info in plan:
+            if wave_info.get('wave') == current_wave:
+                return wave_info.get('agents', [])
+        return []
+    
+    def mark_agent_complete(self, agent: str):
+        """Mark an agent as complete in current wave."""
+        if 'completed' not in self.context['agents']:
+            self.context['agents']['completed'] = []
+        if agent not in self.context['agents']['completed']:
+            self.context['agents']['completed'].append(agent)
+        self._save_context()
+        
+        # Auto-advance wave if complete
+        if self.is_wave_complete():
+            self.advance_wave()
+    
+    def get_next_wave_info(self) -> Optional[Dict]:
+        """Get info about next wave (for handoff)."""
+        plan = self.context['workflow'].get('plan', [])
+        current_wave = self.context['workflow'].get('current_wave', 0)
+        
+        for wave_info in plan:
+            if wave_info.get('wave') == current_wave + 1:
+                return wave_info
+        return None
     
     # Artifact management
     def set_artifact(self, artifact_type: str, path: str):

@@ -61,18 +61,20 @@ When a single search isn't enough, use iterative research:
 
 1. **Save to file** - Create `RESEARCH.md` in project memory:
    
-   **The artifacts path is in your context** - look for `[Artifacts: ...]` at the start of the session.
+   **The artifacts path is injected in your context** - look for `[Artifacts: ...]` at session start.
    
-   Example: `[Artifacts: ~/.factory/memory/projects/auto-translator_127ddc7c/artifacts/]`
+   Example context: `[Artifacts: /Users/john/.factory/memory/projects/myproject_abc123/artifacts]`
    
-   **Save your research there:**
+   **Use the EXACT path from YOUR context (copy it exactly):**
    ```
-   Create("{artifacts_path}/RESEARCH.md", research_content)
+   Write("{paste_exact_artifacts_path_here}/RESEARCH.md", content)
    ```
    
-   Or use **Edit** if updating existing file.
-   
-   **⚠️ NEVER save to user's project directory** - use the artifacts path from context
+   **⚠️ CRITICAL:**
+   - Use the EXACT absolute path from `[Artifacts: ...]` in your context
+   - Path varies per user (could be `/Users/xxx/`, `C:/Users/xxx/`, etc.)
+   - NEVER create files in the user's project directory
+   - NEVER use relative paths or `~`
 
 2. **Return summary** in your output:
    ```

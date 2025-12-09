@@ -329,13 +329,46 @@ def build_context_injection(env, memory, workflow_summary, project_init, cwd, mi
         parts.append(proj_str)
         
         # PROJECT MEMORY PATH - Critical for agents to know where to save artifacts
+        # Use ABSOLUTE path so Factory AI doesn't misinterpret ~ on Windows
         ctx = get_context_index()
         if ctx and cwd:
             try:
                 project_memory_dir = ctx.get_project_memory_dir(cwd)
-                parts.append(f"[Artifacts: {project_memory_dir}/artifacts/]")
+                artifacts_path = project_memory_dir / 'artifacts'
+                # Ensure artifacts folder exists
+                artifacts_path.mkdir(parents=True, exist_ok=True)
+                # Use absolute path with forward slashes for cross-platform compatibility
+                abs_path = str(artifacts_path).replace('\\', '/')
+                parts.append(f"[Artifacts: {abs_path}]")
+                
+                # Also provide memory root for global files
+                memory_root = str(project_memory_dir.parent.parent).replace('\\', '/')
+                parts.append(f"[MemoryRoot: {memory_root}]")
             except:
                 pass
+        
+        # WAVE PROGRESS - If a plan exists, show current wave status
+        try:
+            from shared_context import SharedContext
+            sc = SharedContext()
+            plan = sc.get_plan()
+            if plan:
+                current_wave = sc.get_current_wave()
+                total_waves = len(plan)
+                completed = sc.context['agents'].get('completed', [])
+                
+                # Find current wave info
+                current_phase = "UNKNOWN"
+                wave_agents = []
+                for w in plan:
+                    if w.get('wave') == current_wave:
+                        current_phase = w.get('phase', 'UNKNOWN')
+                        wave_agents = w.get('agents', [])
+                        break
+                
+                parts.append(f"[Wave: {current_wave}/{total_waves} ({current_phase}) | Completed: {', '.join(completed) if completed else 'none'} | Pending: {', '.join([a for a in wave_agents if a not in completed]) if wave_agents else 'none'}]")
+        except:
+            pass
         
         # Key directories (agents can target without ls)
         code_dirs = project_index.get('relationships', {}).get('directories_with_code', [])[:5]
@@ -407,7 +440,7 @@ def main():
             additional_context = f"{resume_context} {additional_context}"
         
         # Add Droidpartment INSTRUCTION (not just banner)
-        version = "3.2.16"
+        version = "3.2.17"
         
         # Check if this is a NEW project (not yet in memory)
         is_new_project = project_init and project_init.get('is_first_time', False)
