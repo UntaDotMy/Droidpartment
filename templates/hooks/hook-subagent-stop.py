@@ -166,26 +166,74 @@ def should_continue_loop():
     return False
 
 def record_agent_output(agent, transcript_path):
-    """Record agent output to shared context."""
+    """Record agent output to shared context with full content extraction."""
     try:
         from shared_context import SharedContext
         sc = SharedContext()
         
-        # Extract summary from transcript if available
-        summary = None
+        # Extract full output from transcript
+        output = None
         if transcript_path:
             try:
                 content = Path(transcript_path).read_text(errors='ignore')
-                # Look for result/summary patterns
-                recent = content[-3000:]
-                if 'value:' in recent:
-                    match = re.search(r'value:\s*["\']?([^"\'}\n]+)', recent)
+                
+                # Try multiple extraction patterns (from most to least specific)
+                
+                # Pattern 1: Look for "Summary:" section (common in dpt-* agents)
+                if 'Summary:' in content:
+                    match = re.search(r'Summary:\s*(.+?)(?:\n\n|\nFindings:|\nFollow-up:|\Z)', content, re.DOTALL)
                     if match:
-                        summary = match.group(1)[:500]  # Limit length
+                        output = match.group(1).strip()[:2000]
+                
+                # Pattern 2: Look for "Findings:" section
+                if not output and 'Findings:' in content:
+                    match = re.search(r'Findings:\s*(.+?)(?:\n\nFollow-up:|\n\nNext|\Z)', content, re.DOTALL)
+                    if match:
+                        output = match.group(1).strip()[:2000]
+                
+                # Pattern 3: Look for last assistant message
+                if not output:
+                    # Find last substantial text block (after last "assistant" role)
+                    parts = content.split('assistant')
+                    if len(parts) > 1:
+                        last_part = parts[-1][:3000]
+                        # Clean up and take meaningful content
+                        lines = [l.strip() for l in last_part.split('\n') if l.strip() and len(l.strip()) > 20]
+                        if lines:
+                            output = '\n'.join(lines[:30])  # First 30 meaningful lines
+                
+                # Pattern 4: Last resort - take recent content
+                if not output:
+                    recent = content[-2000:]
+                    if 'value:' in recent:
+                        match = re.search(r'value:\s*["\']?([^"\'}\n]+)', recent)
+                        if match:
+                            output = match.group(1)[:500]
+                
             except:
                 pass
         
-        sc.record_agent_output(agent or 'unknown', summary or 'completed')
+        # Record with extracted output or "completed"
+        sc.record_agent_output(agent or 'unknown', output or 'completed')
+        
+        # Also save to a dedicated agent outputs file for dpt-output to read
+        try:
+            outputs_file = memory_dir / 'agent_outputs.json'
+            outputs = {}
+            if outputs_file.exists():
+                with open(outputs_file, 'r') as f:
+                    outputs = json.load(f)
+            
+            outputs[agent or 'unknown'] = {
+                'output': output or 'completed',
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            with open(outputs_file, 'w') as f:
+                json.dump(outputs, f, indent=2)
+        except:
+            pass
+        
         return True
     except ImportError:
         pass

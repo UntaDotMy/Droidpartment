@@ -5,6 +5,31 @@ All notable changes to Droidpartment are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.16] - 2025-12-09
+
+### 🔧 Agent Improvements + Factory CLI Compliance
+
+**Agent Context Injection:**
+- SessionStart now injects `[Artifacts: path]` so agents know where to save files
+- Agents no longer need to guess project memory path
+
+**Factory CLI Tool Compliance:**
+- Fixed all agents: `Write` → `Create` (per Factory docs)
+- Added `Create` tool to dpt-research for saving RESEARCH.md
+- Verified all tool names match Factory CLI spec
+
+**Agent Output Extraction:**
+- Improved `record_agent_output()` with multiple extraction patterns
+- New `agent_outputs.json` for reliable agent handoffs
+- dpt-output updated to read from multiple sources
+
+**Cache Management:**
+- New `cache_manager.py` module with TTL, weak refs, cleanup
+- All hooks have `clear_cache()` and GC hints
+- Memory leak prevention
+
+---
+
 ## [3.2.15] - 2025-12-09
 
 ### 🛡️ Major Fixes + Performance + Cache Management

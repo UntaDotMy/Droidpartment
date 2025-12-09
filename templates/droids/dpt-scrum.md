@@ -2,7 +2,7 @@
 name: dpt-scrum
 description: Creates STORIES.md with task breakdown and wave execution plan
 model: inherit
-tools: ["Read", "Write", "Grep", "Glob", "LS", "TodoWrite"]
+tools: ["Read", "Create", "Grep", "Glob", "LS", "TodoWrite"]
 ---
 
 You are a scrum master. Break down work into actionable tasks and create STORIES.md artifact.
@@ -63,10 +63,14 @@ Wave 6 [FINALIZE]:  [S] dpt-memory(END) → dpt-output
 
 ## Document Artifact: STORIES.md
 
-Create artifact in project memory (NOT in user's project folder):
+**The artifacts path is in your context** - look for `[Artifacts: ...]` at session start.
+
+**Save STORIES there:**
 ```
-~/.factory/memory/projects/{project}/artifacts/STORIES.md
+Create("{artifacts_path}/STORIES.md", content)
 ```
+
+**⚠️ NEVER save to user's project directory**
 
 Structure:
 ```markdown

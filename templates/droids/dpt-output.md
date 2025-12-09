@@ -9,12 +9,25 @@ You synthesize all agent results into ONE report. Called LAST after dpt-memory E
 
 ## Read Agent Outputs
 
-Hook stored agent outputs. Read them:
+Read agent outputs from these files (in order of preference):
+
 ```
+# Primary: Dedicated agent outputs file (most reliable)
+Read("~/.factory/memory/agent_outputs.json")
+
+# Secondary: Shared context
 Read("~/.factory/memory/shared_context.json")
+
+# Also check project artifacts for research/PRD/architecture
+Read("~/.factory/memory/projects/{project}/artifacts/RESEARCH.md")
+Read("~/.factory/memory/projects/{project}/artifacts/PRD.md")
+Read("~/.factory/memory/projects/{project}/artifacts/ARCHITECTURE.md")
 ```
 
-This contains outputs from all agents that ran in this session.
+**Priority order:**
+1. `agent_outputs.json` - Contains actual agent output text
+2. `shared_context.json` - Contains agent metadata
+3. Project artifacts - Contains saved documents from agents
 
 ## Also Check Project Memory
 

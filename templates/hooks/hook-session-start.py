@@ -328,6 +328,15 @@ def build_context_injection(env, memory, workflow_summary, project_init, cwd, mi
         proj_str += f" | {file_count} files]"
         parts.append(proj_str)
         
+        # PROJECT MEMORY PATH - Critical for agents to know where to save artifacts
+        ctx = get_context_index()
+        if ctx and cwd:
+            try:
+                project_memory_dir = ctx.get_project_memory_dir(cwd)
+                parts.append(f"[Artifacts: {project_memory_dir}/artifacts/]")
+            except:
+                pass
+        
         # Key directories (agents can target without ls)
         code_dirs = project_index.get('relationships', {}).get('directories_with_code', [])[:5]
         if code_dirs:
@@ -398,7 +407,7 @@ def main():
             additional_context = f"{resume_context} {additional_context}"
         
         # Add Droidpartment INSTRUCTION (not just banner)
-        version = "3.2.15"
+        version = "3.2.16"
         
         # Check if this is a NEW project (not yet in memory)
         is_new_project = project_init and project_init.get('is_first_time', False)
