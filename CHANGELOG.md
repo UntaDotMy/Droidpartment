@@ -5,6 +5,34 @@ All notable changes to Droidpartment are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.10] - 2025-12-09
+
+### 👁️ Visible Indexing Feedback (systemMessage fix)
+
+**Problem**: SessionStart hook output (`additionalContext`) was SILENT - not shown in terminal.
+
+**Research**: Factory AI hooks documentation shows:
+- `additionalContext` → Goes to Droid's context (silent to user)
+- `systemMessage` → **VISIBLE to user in terminal!**
+
+**Solution**: Added `systemMessage` field to SessionStart output.
+
+**Now you'll see:**
+```
+🤖 DROIDPARTMENT v3.2.10 - NEW PROJECT DETECTED
+═══════════════════════════════════════════════════════════════════════
+🆕 NEW PROJECT: MyProject
+📁 Creating memory folder: MyProject_a1b2c3d4
+📊 Indexed 156 files
+✅ Generated STRUCTURE.md
+📋 Project ID: MyProject_a1b2c3d4
+📁 Memory: ~/.factory/memory/projects/MyProject_a1b2c3d4
+═══════════════════════════════════════════════════════════════════════
+✅ Indexing complete! Starting memory agent...
+```
+
+---
+
 ## [3.2.9] - 2025-12-09
 
 ### 🎯 Deterministic Project Memory + Pattern Recognition + Visible Feedback

@@ -359,7 +359,7 @@ def main():
             additional_context = f"{resume_context} {additional_context}"
         
         # Add Droidpartment INSTRUCTION (not just banner)
-        version = "3.2.9"
+        version = "3.2.10"
         
         # Check if this is a NEW project (not yet in memory)
         is_new_project = project_init and project_init.get('is_first_time', False)
@@ -459,8 +459,33 @@ The UserPromptSubmit hook will provide specific Task() calls for this request.
         else:
             additional_context = droidpartment_instruction
         
+        # Build VISIBLE feedback message (systemMessage is shown to user!)
+        if is_new_project:
+            visible_message = f"""
+🤖 DROIDPARTMENT v{version} - NEW PROJECT DETECTED
+═══════════════════════════════════════════════════════════════════════
+{feedback_lines}
+📋 Project ID: {project_id}
+📁 Memory: {memory_dir}
+═══════════════════════════════════════════════════════════════════════
+✅ Indexing complete! Starting memory agent...
+"""
+        else:
+            file_count = project_init.get('file_count', 0) if project_init else 0
+            visible_message = f"""
+🤖 DROIDPARTMENT v{version} - PROJECT LOADED
+═══════════════════════════════════════════════════════════════════════
+📂 Project: {project_id}
+📁 Memory: {memory_dir}
+📊 Files indexed: {file_count}
+═══════════════════════════════════════════════════════════════════════
+"""
+        
         # Factory AI JSON output format for SessionStart
+        # - additionalContext: Goes to Droid's context (silent)
+        # - systemMessage: VISIBLE to user in terminal!
         output = {
+            "systemMessage": visible_message.strip(),
             "hookSpecificOutput": {
                 "hookEventName": "SessionStart",
                 "additionalContext": additional_context
