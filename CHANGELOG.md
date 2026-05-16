@@ -5,6 +5,10 @@ All notable changes to Droidpartment are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.1] - 2026-05-17
+
+Renames the platform-binary scope from `@droidpartment/*` to `@untadotmy/*` because the `@droidpartment` org does not exist on npm. The main `droidpartment` package keeps its unscoped name. Functionally identical to v4.0.0; only `package.json`, `bin/install.js`, `platform-packages/README.md`, and `.github/workflows/release.yml` changed.
+
 ## [4.0.0] - 2026-05-17
 
 Major v4 release. First v4 published to npm. Replaces the v3.x Python hook layer with a native Rust binary, introduces the token saver, and adds real wave-execution automation enforced by the hook layer.
