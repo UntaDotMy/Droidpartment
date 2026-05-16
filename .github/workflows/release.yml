@@ -120,99 +120,26 @@ jobs:
           draft: false
           generate_release_notes: true
 
-  publish-platform-pkgs:
-    name: publish droidpartment-cli-${{ matrix.platform_pkg }}
-    needs: release
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform_pkg: darwin-arm64
-            asset: dpt
-            os: darwin
-            cpu: arm64
-          - platform_pkg: darwin-x64
-            asset: dpt
-            os: darwin
-            cpu: x64
-          - platform_pkg: linux-arm64
-            asset: dpt
-            os: linux
-            cpu: arm64
-          - platform_pkg: linux-x64
-            asset: dpt
-            os: linux
-            cpu: x64
-          - platform_pkg: win32-x64
-            asset: dpt.exe
-            os: win32
-            cpu: x64
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          registry-url: 'https://registry.npmjs.org'
-      - uses: actions/download-artifact@v4
-        with:
-          name: dpt-${{ matrix.platform_pkg }}
-          path: tmp
-      - name: Extract binary
-        shell: bash
-        run: |
-          mkdir -p platform-packages/cli-${{ matrix.platform_pkg }}/bin
-          if [[ "${{ matrix.asset }}" == *.exe ]]; then
-            cd tmp && 7z x dpt-${{ matrix.platform_pkg }}.zip && cd ..
-            cp tmp/${{ matrix.asset }} platform-packages/cli-${{ matrix.platform_pkg }}/bin/
-          else
-            cd tmp && tar xzf dpt-${{ matrix.platform_pkg }}.tar.gz && cd ..
-            cp tmp/${{ matrix.asset }} platform-packages/cli-${{ matrix.platform_pkg }}/bin/
-            chmod +x platform-packages/cli-${{ matrix.platform_pkg }}/bin/${{ matrix.asset }}
-          fi
-      - name: Generate package.json
-        shell: bash
-        env:
-          PLATFORM: ${{ matrix.platform_pkg }}
-          OS: ${{ matrix.os }}
-          CPU: ${{ matrix.cpu }}
-        run: |
-          VERSION="${GITHUB_REF#refs/tags/v}"
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            VERSION="${{ github.event.inputs.version }}"
-            VERSION="${VERSION#v}"
-          fi
-          cat > "platform-packages/cli-${PLATFORM}/package.json" <<EOF
-          {
-            "name": "droidpartment-cli-${PLATFORM}",
-            "version": "${VERSION}",
-            "description": "Droidpartment dpt binary for ${OS}-${CPU}",
-            "license": "MIT",
-            "repository": "github:UntaDotMy/Droidpartment",
-            "os": ["${OS}"],
-            "cpu": ["${CPU}"],
-            "files": ["bin"]
-          }
-          EOF
-          cat "platform-packages/cli-${PLATFORM}/package.json"
-      - name: Publish to npm
-        working-directory: platform-packages/cli-${{ matrix.platform_pkg }}
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --access public
-
   publish-main:
     name: publish droidpartment
-    needs: publish-platform-pkgs
+    needs: release
     runs-on: ubuntu-latest
+    # OIDC trusted publishing requires id-token: write so GitHub can mint the
+    # short-lived ID token that npm verifies against the package's Trusted
+    # Publisher record. No NPM_TOKEN secret is used.
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           registry-url: 'https://registry.npmjs.org'
+      # npm trusted publishing requires CLI 11.5.1+. The Node 20 image ships
+      # with an older npm; install the latest before publishing.
+      - name: Upgrade npm
+        run: npm install -g npm@latest
       - name: Sync version into package.json
         shell: bash
         run: |
@@ -225,13 +152,10 @@ jobs:
           const fs = require('fs');
           const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
           pkg.version = '${VERSION}';
-          for (const k of Object.keys(pkg.optionalDependencies || {})) {
-            pkg.optionalDependencies[k] = '${VERSION}';
-          }
           fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));
           "
           cat package.json
-      - name: Publish to npm
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --access public
+      # --provenance signs an attestation that the package was built from this
+      # exact commit on this exact workflow, surfaced on the npm package page.
+      - name: Publish to npm via OIDC trusted publishing
+        run: npm publish --provenance --access public

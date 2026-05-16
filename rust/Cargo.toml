@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/dpt-cli"]
 
 [workspace.package]
-version = "4.0.2"
+version = "4.0.3"
 edition = "2021"
 license = "MIT"
 authors = ["Nasri"]

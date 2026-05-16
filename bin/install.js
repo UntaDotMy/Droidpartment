@@ -117,20 +117,195 @@ function findPlatformBinary() {
     const platform = process.platform; // win32 | darwin | linux
     const arch = process.arch;          // x64 | arm64
     const ext = platform === 'win32' ? '.exe' : '';
-    const pkgName = `droidpartment-cli-${platform}-${arch}`;
 
-    // 1. Try resolved optional dependency
+    // 1. Try local source build (developer / monorepo install)
+    const localBuild = path.join(__dirname, '..', 'rust', 'target', 'release', `dpt${ext}`);
+    if (fs.existsSync(localBuild)) {
+        log.verbose(`using local build at ${localBuild}`);
+        return localBuild;
+    }
+
+    // 2. Try resolved optional dependency (legacy v3.x and early v4.x layout)
     try {
+        const pkgName = `droidpartment-cli-${platform}-${arch}`;
         const pkgPath = require.resolve(`${pkgName}/package.json`, { paths: [path.join(__dirname, '..')] });
         const pkgDir = path.dirname(pkgPath);
         const candidate = path.join(pkgDir, 'bin', `dpt${ext}`);
         if (fs.existsSync(candidate)) return candidate;
-    } catch { /* not installed */ }
+    } catch { /* not installed; that is the v4.0.3+ default */ }
 
-    // 2. Try local source build (developer / monorepo install)
-    const localBuild = path.join(__dirname, '..', 'rust', 'target', 'release', `dpt${ext}`);
-    if (fs.existsSync(localBuild)) return localBuild;
+    // 3. Download from the GitHub release that matches this package's version.
+    //    This is the canonical v4.0.3+ path: a single npm package downloads
+    //    the right pre-built binary at install time, SHA256-verified against
+    //    the release's SHA256SUMS file.
+    const downloaded = downloadBinaryFromRelease(CURRENT_VERSION, platform, arch, ext);
+    if (downloaded) return downloaded;
 
+    return null;
+}
+
+function downloadBinaryFromRelease(version, platform, arch, ext) {
+    const isWin = platform === 'win32';
+    const assetName = `dpt-${platform}-${arch}${isWin ? '.zip' : '.tar.gz'}`;
+    const baseUrl = `https://github.com/UntaDotMy/Droidpartment/releases/download/v${version}`;
+    const assetUrl = `${baseUrl}/${assetName}`;
+    const sumsUrl = `${baseUrl}/SHA256SUMS`;
+
+    const cacheRoot = path.join(process.env.HOME || process.env.USERPROFILE || os.homedir(), '.factory', 'cache', 'dpt-download');
+    ensureDir(cacheRoot);
+    const cachedAsset = path.join(cacheRoot, `${version}-${assetName}`);
+    const cachedBinary = path.join(cacheRoot, `${version}-dpt${ext}`);
+
+    // Skip download if previous run already extracted this version successfully.
+    if (fs.existsSync(cachedBinary)) {
+        log.verbose(`reusing cached binary ${cachedBinary}`);
+        return cachedBinary;
+    }
+
+    if (DRY_RUN) {
+        log.dry(`would download ${assetUrl}`);
+        return null;
+    }
+
+    log.info(`downloading dpt binary for ${platform}-${arch} from GitHub release v${version}...`);
+    if (!httpDownload(assetUrl, cachedAsset)) {
+        log.err(`failed to download ${assetUrl}`);
+        log.info(`Verify a release exists at https://github.com/UntaDotMy/Droidpartment/releases/tag/v${version}`);
+        return null;
+    }
+
+    const sumsPath = path.join(cacheRoot, `${version}-SHA256SUMS`);
+    if (!httpDownload(sumsUrl, sumsPath)) {
+        log.warn(`could not download ${sumsUrl}; skipping checksum verification`);
+    } else {
+        const expected = parseSha256SumsFor(sumsPath, assetName);
+        if (!expected) {
+            log.warn(`no entry for ${assetName} in SHA256SUMS; skipping checksum verification`);
+        } else {
+            const actual = sha256File(cachedAsset);
+            if (actual !== expected) {
+                log.err(`SHA256 mismatch for ${assetName}`);
+                log.err(`  expected ${expected}`);
+                log.err(`  actual   ${actual}`);
+                try { fs.unlinkSync(cachedAsset); } catch {}
+                return null;
+            }
+            log.verbose(`SHA256 verified: ${expected}`);
+        }
+    }
+
+    // Extract the archive next to the cached blob, then move out the binary.
+    const extractDir = path.join(cacheRoot, `${version}-extracted`);
+    if (fs.existsSync(extractDir)) {
+        try { fs.rmSync(extractDir, { recursive: true, force: true }); } catch {}
+    }
+    ensureDir(extractDir);
+
+    const ok = isWin
+        ? extractZip(cachedAsset, extractDir)
+        : extractTarGz(cachedAsset, extractDir);
+    if (!ok) {
+        log.err(`failed to extract ${assetName}`);
+        return null;
+    }
+
+    const binaryName = `dpt${ext}`;
+    const extracted = findFirst(extractDir, binaryName);
+    if (!extracted) {
+        log.err(`binary ${binaryName} not found in extracted archive`);
+        return null;
+    }
+
+    fs.copyFileSync(extracted, cachedBinary);
+    if (!isWin) {
+        try { fs.chmodSync(cachedBinary, 0o755); } catch {}
+    }
+    try { fs.rmSync(extractDir, { recursive: true, force: true }); } catch {}
+    log.ok(`fetched dpt v${version} for ${platform}-${arch}`);
+    return cachedBinary;
+}
+
+function httpDownload(url, destPath) {
+    // Use the platform's curl (Windows 10+ ships curl.exe; macOS/Linux always
+    // have it). Falls back to PowerShell's Invoke-WebRequest on Windows when
+    // curl is missing. Synchronous because the rest of install.js is sync.
+    if (DRY_RUN) {
+        log.dry(`would HTTP GET ${url} -> ${destPath}`);
+        return true;
+    }
+    const args = ['-fsSL', '--retry', '3', '--retry-delay', '2', url, '-o', destPath];
+    let r = spawnSync('curl', args, { stdio: 'pipe' });
+    if (r.error && r.error.code === 'ENOENT' && process.platform === 'win32') {
+        r = spawnSync('powershell', [
+            '-NoProfile',
+            '-NonInteractive',
+            '-Command',
+            `try { Invoke-WebRequest -Uri "${url}" -OutFile "${destPath}" -UseBasicParsing; exit 0 } catch { exit 1 }`,
+        ], { stdio: 'pipe' });
+    }
+    if (r.status !== 0) {
+        log.verbose(`download failed (${url}): ${(r.stderr && r.stderr.toString()) || 'no stderr'}`);
+        return false;
+    }
+    return fs.existsSync(destPath) && fs.statSync(destPath).size > 0;
+}
+
+function extractTarGz(archivePath, destDir) {
+    const r = spawnSync('tar', ['-xzf', archivePath, '-C', destDir], { stdio: 'pipe' });
+    if (r.status !== 0) {
+        log.verbose(`tar -xzf failed: ${(r.stderr && r.stderr.toString()) || 'no stderr'}`);
+        return false;
+    }
+    return true;
+}
+
+function extractZip(archivePath, destDir) {
+    // Windows 10+ ships tar.exe with built-in zip support.
+    let r = spawnSync('tar', ['-xf', archivePath, '-C', destDir], { stdio: 'pipe' });
+    if (r.status === 0) return true;
+    r = spawnSync('powershell', [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        `Expand-Archive -Path "${archivePath}" -DestinationPath "${destDir}" -Force`,
+    ], { stdio: 'pipe' });
+    if (r.status !== 0) {
+        log.verbose(`Expand-Archive failed: ${(r.stderr && r.stderr.toString()) || 'no stderr'}`);
+        return false;
+    }
+    return true;
+}
+
+function parseSha256SumsFor(sumsPath, fileName) {
+    const text = fs.readFileSync(sumsPath, 'utf8');
+    for (const raw of text.split(/\r?\n/)) {
+        const line = raw.trim();
+        if (!line) continue;
+        // Format: "<sha256>  <filename>" (two spaces) or single space variants.
+        const m = line.match(/^([0-9a-fA-F]{64})\s+\*?(.+)$/);
+        if (!m) continue;
+        if (path.basename(m[2]) === fileName) return m[1].toLowerCase();
+    }
+    return null;
+}
+
+function sha256File(filePath) {
+    const crypto = require('crypto');
+    const hash = crypto.createHash('sha256');
+    hash.update(fs.readFileSync(filePath));
+    return hash.digest('hex').toLowerCase();
+}
+
+function findFirst(rootDir, baseName) {
+    if (!fs.existsSync(rootDir)) return null;
+    for (const entry of fs.readdirSync(rootDir, { withFileTypes: true })) {
+        const p = path.join(rootDir, entry.name);
+        if (entry.isFile() && entry.name === baseName) return p;
+        if (entry.isDirectory()) {
+            const sub = findFirst(p, baseName);
+            if (sub) return sub;
+        }
+    }
     return null;
 }
 
@@ -140,8 +315,8 @@ function copyBinary(targetDir, manifest) {
     const binSrc = findPlatformBinary();
     if (!binSrc) {
         log.err(`No native dpt binary available for ${platform}-${process.arch}.`);
-        log.info('Make sure your npm install completed (the platform package is an optional dependency).');
-        log.info('Or build from source: cd rust && cargo build --release');
+        log.info('The installer downloads the binary at install time from GitHub releases.');
+        log.info('Check your network connection or build from source: cd rust && cargo build --release');
         return null;
     }
 

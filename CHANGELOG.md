@@ -5,6 +5,28 @@ All notable changes to Droidpartment are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.3] - 2026-05-17
+
+Single-package distribution. Drops the platform-package optionalDependencies model; the main `droidpartment` package now downloads the matching pre-built binary from the GitHub release at install time, SHA256-verified against the release's `SHA256SUMS` file. Cuts npm distribution from 6 packages (1 main + 5 platform) to 1 main package, removes the bootstrap problem that blocked v4.0.0 / v4.0.1 / v4.0.2 publishes, and switches the npm publish path to OIDC trusted publishing (no NPM_TOKEN secret required).
+
+Same supported platforms: linux-x64, linux-arm64, darwin-x64, darwin-arm64, win32-x64.
+
+### Install flow
+
+`bin/install.js` `findPlatformBinary()` now resolves in this order:
+1. Local Rust build (`rust/target/release/dpt[.exe]`) for developer / monorepo installs.
+2. Legacy `droidpartment-cli-*` optional dependency (kept for backward compatibility with v4.0.2 installs that still have the platform package on disk).
+3. **GitHub release download** to `~/.factory/cache/dpt-download/${version}-dpt[.exe]`. Cached so repeat installs of the same version do not re-download. SHA256 verified against `SHA256SUMS` from the same release.
+
+The download uses `curl` (universally available on Windows 10+, macOS, Linux) with a PowerShell `Invoke-WebRequest` fallback on Windows. Extraction uses `tar -xzf` for `.tar.gz` and `tar -xf` (with PowerShell `Expand-Archive` fallback) for `.zip`. No third-party Node packages added; runtime stays at zero dependencies.
+
+### Release pipeline
+
+`.github/workflows/release.yml`:
+- Removed the `publish-platform-pkgs` matrix job entirely.
+- `publish-main` now uses OIDC trusted publishing per [npm trusted publishers docs](https://docs.npmjs.com/trusted-publishers): adds `permissions: id-token: write`, upgrades to `npm@latest` (trusted publishing requires CLI 11.5.1+), and runs `npm publish --provenance --access public`. No `NODE_AUTH_TOKEN` / `NPM_TOKEN` secret is referenced.
+- The 5-platform binary build matrix and GitHub release upload are unchanged; those binaries are now the canonical distribution channel that `bin/install.js` pulls from.
+
 ## [4.0.2] - 2026-05-17
 
 Drops the npm scope on platform packages. The `@untadotmy` user scope is not auto-provisioned on npm and `@droidpartment` org does not exist, so platform packages now publish as unscoped names: `droidpartment-cli-darwin-arm64`, `droidpartment-cli-darwin-x64`, `droidpartment-cli-linux-arm64`, `droidpartment-cli-linux-x64`, `droidpartment-cli-win32-x64`. Functionally identical to v4.0.1.
