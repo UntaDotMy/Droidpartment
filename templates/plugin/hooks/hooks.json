@@ -1,0 +1,110 @@
+{
+  "PreToolUse": [
+    {
+      "matcher": "*",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "${DROID_PLUGIN_ROOT}/bin/dpt hook pre-tool-use",
+          "timeout": 5
+        }
+      ]
+    }
+  ],
+  "SessionStart": [
+    {
+      "matcher": "*",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "${DROID_PLUGIN_ROOT}/bin/dpt hook session-start",
+          "timeout": 15
+        }
+      ]
+    }
+  ],
+  "UserPromptSubmit": [
+    {
+      "matcher": "*",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "${DROID_PLUGIN_ROOT}/bin/dpt hook user-prompt-submit",
+          "timeout": 5
+        }
+      ]
+    }
+  ],
+  "PostToolUse": [
+    {
+      "matcher": "*",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "${DROID_PLUGIN_ROOT}/bin/dpt hook post-tool-use",
+          "timeout": 5
+        }
+      ]
+    }
+  ],
+  "Stop": [
+    {
+      "matcher": "*",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "${DROID_PLUGIN_ROOT}/bin/dpt hook stop",
+          "timeout": 5
+        }
+      ]
+    }
+  ],
+  "SubagentStop": [
+    {
+      "matcher": "*",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "${DROID_PLUGIN_ROOT}/bin/dpt hook subagent-stop",
+          "timeout": 5
+        }
+      ]
+    }
+  ],
+  "SessionEnd": [
+    {
+      "matcher": "*",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "${DROID_PLUGIN_ROOT}/bin/dpt hook session-end",
+          "timeout": 10
+        }
+      ]
+    }
+  ],
+  "PreCompact": [
+    {
+      "matcher": "*",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "${DROID_PLUGIN_ROOT}/bin/dpt hook pre-compact",
+          "timeout": 5
+        }
+      ]
+    }
+  ],
+  "Notification": [
+    {
+      "matcher": "",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "${DROID_PLUGIN_ROOT}/bin/dpt hook notification",
+          "timeout": 5
+        }
+      ]
+    }
+  ]
+}

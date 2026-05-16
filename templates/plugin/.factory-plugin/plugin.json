@@ -1,0 +1,11 @@
+{
+  "name": "droidpartment",
+  "description": "Token-saving multi-agent orchestration for Factory Droid CLI. Native Rust compactor, auto-rewrite hooks, 18 expert sub-droids, learning memory.",
+  "version": "4.0.0",
+  "author": {
+    "name": "Nasri",
+    "url": "https://github.com/UntaDotMy"
+  },
+  "homepage": "https://github.com/UntaDotMy/Droidpartment",
+  "repository": "https://github.com/UntaDotMy/Droidpartment"
+}

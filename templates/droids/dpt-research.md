@@ -2,6 +2,7 @@
 name: dpt-research
 description: Multi-hop research specialist finding best practices from official sources
 model: inherit
+reasoningEffort: medium
 tools: ["WebSearch", "FetchUrl", "Read", "Grep", "Glob", "LS", "Create"]
 ---
 
@@ -60,21 +61,14 @@ When a single search isn't enough, use iterative research:
 **IMPORTANT:** Always SAVE your research findings to a file so other agents can access them!
 
 1. **Save to file** - Create `RESEARCH.md` in project memory:
-   
-   **The artifacts path is injected in your context** - look for `[Artifacts: ...]` at session start.
-   
-   Example context: `[Artifacts: /Users/john/.factory/memory/projects/myproject_abc123/artifacts]`
-   
-   **Use the EXACT path from YOUR context (copy it exactly):**
+
+   The SessionStart hook injects `[ProjectMemory: <absolute path>]` into your context. Create the artifact under the project memory path verbatim:
+
    ```
-   Write("{paste_exact_artifacts_path_here}/RESEARCH.md", content)
+   Create("<ProjectMemory>/artifacts/RESEARCH.md", content)
    ```
-   
-   **⚠️ CRITICAL:**
-   - Use the EXACT absolute path from `[Artifacts: ...]` in your context
-   - Path varies per user (could be `/Users/xxx/`, `C:/Users/xxx/`, etc.)
-   - NEVER create files in the user's project directory
-   - NEVER use relative paths or `~`
+
+   Never write to the user's project directory.
 
 2. **Return summary** in your output:
    ```
@@ -99,6 +93,7 @@ When a single search isn't enough, use iterative research:
    
    Follow-up:
    - next_agent: dpt-arch (or dpt-dev)
+   - needs_revision: false
    - confidence: 85
    ```
 

@@ -1,159 +1,99 @@
 ---
 name: droidpartment
-description: MANDATORY - Use for ALL tasks. 18 expert agents handle everything. DO NOT work directly.
+description: Overview skill for the Droidpartment toolkit. Loads automatically when the user mentions Droidpartment, dpt, the token saver, sub-droids (dpt-*), wave execution, or the orchestration workflow.
 ---
 
-# 🚨 STOP! USE DROIDPARTMENT AGENTS!
+# Droidpartment
 
-```
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                                                                              ║
-║  YOU ARE NOT ALLOWED TO DO WORK DIRECTLY.                                   ║
-║                                                                              ║
-║  Your ONLY job is to call Task() with the appropriate dpt-* agent.          ║
-║  The agents do the actual work. You just orchestrate.                       ║
-║                                                                              ║
-║  BEFORE YOU DO ANYTHING ELSE, CALL THIS:                                    ║
-║  Task(subagent_type: "dpt-memory", prompt: "START: [describe the task]")    ║
-║                                                                              ║
-╚══════════════════════════════════════════════════════════════════════════════╝
-```
+Droidpartment v4 is a token-saving multi-agent toolkit for Factory's Droid CLI.
 
-## ⛔ FORBIDDEN Actions (will cause errors)
+## What is wired
 
-- Writing code yourself
-- Reading files yourself  
-- Analyzing codebase yourself
-- Reviewing code yourself
-- Testing yourself
-- ANY action without calling Task() first
+- Native binary `dpt` at `~/.factory/bin/dpt(.exe)`.
+- 9 hooks in `~/.factory/settings.json` per [Droid hooks reference](https://docs.factory.ai/reference/hooks-reference.md):
+  - `SessionStart` injects the operating contract + `[ProjectMemory: <abs path>]` marker.
+  - `PreToolUse` auto-rewrites noisy `Execute` commands through `dpt run --` (token compaction).
+  - `PostToolUse` records stats and re-injects a plan summary on every `TodoWrite` call.
+  - `Stop` reads `<ProjectMemory>/artifacts/STORIES.md` and blocks premature termination if rows remain pending or `needs_revision`. Honors `stop_hook_active` to avoid loops.
+  - `UserPromptSubmit`, `SubagentStop`, `SessionEnd`, `PreCompact`, `Notification` are silent.
+- 18 specialist sub-droids in `~/.factory/droids/dpt-*.md`.
+- 5 skill bundles (this one + `dpt-token-saver`, `dpt-bugfix`, `dpt-audit`, `dpt-fullstack`).
+- YAML learning store under `~/.factory/memory/`.
 
-## 🎯 Auto-Route Based on Task Complexity
+## Three things to know
 
-### 🟢 SIMPLE (bug fix, typo, rename, config change)
-```javascript
-Task(subagent_type: "dpt-memory", prompt: "START: [describe task]")
-Task(subagent_type: "dpt-dev", prompt: "[implement fix]")
-Task(subagent_type: "dpt-qa", prompt: "verify the fix works")
-Task(subagent_type: "dpt-memory", prompt: "END: what we learned")
-Task(subagent_type: "dpt-output", prompt: "summarize results")
-```
+1. **Token saver is automated.** The `PreToolUse` hook auto-rewrites noisy commands (`cargo test`, `pytest`, `git status`, `rg`, `npm run build`, etc.) to run through `dpt run -- <cmd>`. Full output is saved to `~/.factory/raw-output/<date>/<id>/`; only a semantic summary enters context. Recover with `dpt raw <id>`. Token counts are exact via `tiktoken-rs` (`o200k_base`).
 
-### 🟡 MEDIUM (single feature, endpoint, component)
-```javascript
-Task(subagent_type: "dpt-memory", prompt: "START: [feature name]")
-Task(subagent_type: "dpt-scrum", prompt: "break down into steps")
-Task(subagent_type: "dpt-dev", prompt: "[implement feature]")
-Task(subagent_type: "dpt-qa", prompt: "test feature")
-Task(subagent_type: "dpt-memory", prompt: "END: lessons learned")
-Task(subagent_type: "dpt-output", prompt: "summarize")
+2. **Plan ledger is automated.** Use `TodoWrite` for any multi-step task; the `PostToolUse:TodoWrite` hook re-injects a fresh `Plan: X/Y completed, Z in progress` summary on every call. Sub-droids that drive multi-wave work (`dpt-scrum`) also persist `<ProjectMemory>/artifacts/STORIES.md`.
+
+3. **Sub-droids are optional.** The `dpt-*` sub-droids are delegation targets for the `Task` tool. Use them when isolated context or expert framing helps. The orchestrator does **not** auto-dispatch; you are responsible for routing via the `Follow-up:` text contract each sub-droid returns.
+
+## Quick reference
+
+```bash
+# Verify install
+dpt --version
+dpt config
+npx droidpartment doctor
+
+# Use the compactor explicitly (PreToolUse already does this for you)
+dpt run -- cargo test --workspace
+dpt run --json -- pytest tests -q
+dpt raw <id>
+
+# See savings + droid usage
+dpt stats
+dpt stats --by-adapter --daily
 ```
 
-### 🔴 COMPLEX (new system, multi-component, full feature)
-```javascript
-// Wave 1: Initialize
-Task(subagent_type: "dpt-memory", prompt: "START: [system name]")
-Task(subagent_type: "dpt-research", prompt: "best practices for [tech]")
+## Wave execution playbooks
 
-// Wave 2: Plan
-Task(subagent_type: "dpt-product", prompt: "create PRD.md")
+| Skill              | When                                                              |
+|--------------------|-------------------------------------------------------------------|
+| `dpt-fullstack`    | Multi-component feature, touches >2 files, needs PRD + architecture |
+| `dpt-bugfix`       | Specific bug, regression, or failing test in known scope           |
+| `dpt-audit`        | Security / quality / readiness review on a branch or PR           |
+| `dpt-token-saver`  | Anything about the compactor itself                                |
 
-// Wave 3: Design
-Task(subagent_type: "dpt-arch", prompt: "create ARCHITECTURE.md")
+For multi-feature projects with milestones: prefer Droid's `/missions`. For plan-heavy single-feature work: prefer Droid's `/spec` (Shift+Tab).
 
-// Wave 4: Breakdown
-Task(subagent_type: "dpt-scrum", prompt: "create STORIES.md")
+## Specialists (18 sub-droids)
 
-// Wave 5: Implement (parallel)
-Task(subagent_type: "dpt-dev", prompt: "[component 1]")
-Task(subagent_type: "dpt-dev", prompt: "[component 2]")
+| Group     | Sub-droids                                                                  |
+|-----------|-----------------------------------------------------------------------------|
+| Memory    | `dpt-memory`, `dpt-output`                                                  |
+| Planning  | `dpt-product`, `dpt-research`, `dpt-arch`, `dpt-scrum`                      |
+| Code      | `dpt-dev`, `dpt-data`, `dpt-api`, `dpt-ux`, `dpt-ops`                       |
+| Quality   | `dpt-qa`, `dpt-sec`, `dpt-perf`, `dpt-lead`, `dpt-review`                   |
+| Docs      | `dpt-docs`, `dpt-grammar`                                                   |
 
-// Wave 6: Audit (parallel)
-Task(subagent_type: "dpt-qa", prompt: "test all")
-Task(subagent_type: "dpt-sec", prompt: "security audit")
-Task(subagent_type: "dpt-lead", prompt: "code review")
+Use `[P]` for parallel work and `[S]` for sequential when planning waves.
 
-// Wave 7: Finalize
-Task(subagent_type: "dpt-memory", prompt: "END: capture all lessons")
-Task(subagent_type: "dpt-output", prompt: "final report")
-```
-
-## 👥 All 18 Agents
-
-| Agent | Expertise | When to Use |
-|-------|-----------|-------------|
-| **dpt-memory** | Learning system | ALWAYS first (START) and near-last (END) |
-| **dpt-output** | Report synthesis | ALWAYS the final step |
-| **dpt-product** | PRD, requirements | Complex features needing spec |
-| **dpt-arch** | Architecture | System design, patterns |
-| **dpt-scrum** | Task breakdown | Break work into stories |
-| **dpt-research** | Best practices | Need solutions |
-| **dpt-dev** | Code implementation | Writing code |
-| **dpt-qa** | Testing | Verify implementation |
-| **dpt-sec** | Security audit | Security-sensitive code |
-| **dpt-lead** | Code review | Quality standards |
-| **dpt-review** | Simplicity check | Over-engineering |
-| **dpt-perf** | Performance | Optimization |
-| **dpt-data** | Database | Schema, queries |
-| **dpt-api** | API design | REST endpoints |
-| **dpt-ux** | UI/UX | Frontend design |
-| **dpt-ops** | DevOps | CI/CD, deployment |
-| **dpt-docs** | Documentation | README, guides |
-| **dpt-grammar** | Writing quality | Text improvement |
-
-## 🌊 Wave Execution Pattern
+## Output contract (every sub-droid returns this)
 
 ```
-Wave 1 [INIT]:      [P] dpt-memory(START), [P] dpt-research
-Wave 2 [PLAN]:      [S] dpt-product → PRD.md
-Wave 3 [DESIGN]:    [S] dpt-arch → ARCHITECTURE.md  
-Wave 4 [BREAKDOWN]: [S] dpt-scrum → STORIES.md
-Wave 5 [IMPLEMENT]: [P] dpt-dev (per component)
-Wave 6 [AUDIT]:     [P] dpt-qa, [P] dpt-sec, [P] dpt-lead
-Wave 7 [FINALIZE]:  [S] dpt-memory(END), [S] dpt-output
+Summary: <one line>
 
-[P] = Parallel (run simultaneously)
-[S] = Sequential (wait for previous)
+Findings:
+- <bullet>
+
+Artifacts:
+- <abs path or relative to ProjectMemory> (created|read)
+
+Follow-up:
+- next_agent: <name|null>
+- needs_revision: <true|false>
+- revision_reason: "<why>"          # only if needs_revision: true
+- revision_agent: <name>             # default dpt-dev, only if needs_revision
+- confidence: <0-100>
 ```
 
-## 📁 Artifacts Location
+The orchestrator parses this and decides the next `Task()`. Audit lanes returning `needs_revision: true` are capped at 3 revision rounds per `dpt-audit` policy.
 
-All artifacts in project memory (NOT in user's project):
-```
-~/.factory/memory/projects/{project}/artifacts/
-├── PRD.md           (from dpt-product)
-├── ARCHITECTURE.md  (from dpt-arch)
-└── STORIES.md       (from dpt-scrum)
-```
+## Where to look when something feels wrong
 
-## 🔄 Feedback Loop
-
-If audit finds issues:
-```
-needs_revision: true
-revision_agent: dpt-dev
-revision_reason: "Security issue in auth"
-```
-→ dpt-dev fixes → audits re-run → max 3 revisions
-
-## 💡 Examples
-
-### Bug Fix
-```javascript
-Task(subagent_type: "dpt-memory", prompt: "START: fix login timeout bug")
-Task(subagent_type: "dpt-dev", prompt: "fix timeout in auth/token.ts")
-Task(subagent_type: "dpt-qa", prompt: "verify timeout is fixed")
-Task(subagent_type: "dpt-memory", prompt: "END: fixed by increasing token expiry")
-Task(subagent_type: "dpt-output", prompt: "summarize bug fix")
-```
-
-### New Feature
-```javascript
-Task(subagent_type: "dpt-memory", prompt: "START: add user profile page")
-Task(subagent_type: "dpt-product", prompt: "create PRD for profile page")
-Task(subagent_type: "dpt-arch", prompt: "design profile components")
-Task(subagent_type: "dpt-dev", prompt: "implement profile page")
-Task(subagent_type: "dpt-qa", prompt: "test profile functionality")
-Task(subagent_type: "dpt-memory", prompt: "END: profile page complete")
-Task(subagent_type: "dpt-output", prompt: "summarize implementation")
-```
+- `npx droidpartment status` -- install version + binary path + savings
+- `npx droidpartment doctor` -- diagnostics
+- `~/.factory/dpt-config.json` -- token-saver and behavior config
+- `~/.factory/raw-output/` -- full output of compacted runs
+- `~/.factory/memory/stats/compaction.json` -- cumulative savings

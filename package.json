@@ -1,7 +1,7 @@
 {
   "name": "droidpartment",
-  "version": "3.2.17",
-  "description": "🚀 Multi-agent orchestration for Factory AI with 18 specialized agents, wave execution, learning memory, and zero dependencies. Production-grade autonomous development.",
+  "version": "4.0.0",
+  "description": "Token-saving multi-agent orchestration for Factory AI Droid CLI. Native Rust compactor, auto-rewrite hooks, 18 expert sub-droids, learning memory.",
   "author": "Nasri",
   "license": "MIT",
   "bin": {
@@ -14,23 +14,27 @@
     "CHANGELOG.md",
     "LICENSE"
   ],
+  "scripts": {
+    "test": "node tests/install.test.js"
+  },
   "keywords": [
     "factory-ai",
+    "factory-droid",
+    "droid-cli",
     "multi-agent",
     "orchestration",
     "ai-agents",
-    "autonomous",
-    "workflow",
-    "wave-execution",
+    "token-saver",
+    "command-compactor",
+    "hooks",
+    "subagents",
+    "custom-droids",
+    "skills",
     "memory-system",
     "code-review",
     "security-audit",
-    "scrum",
-    "devops",
-    "architecture",
-    "testing",
-    "claude",
-    "droid"
+    "rust",
+    "autonomous"
   ],
   "repository": {
     "type": "git",
@@ -42,5 +46,12 @@
   },
   "engines": {
     "node": ">=16.0.0"
+  },
+  "optionalDependencies": {
+    "@droidpartment/cli-darwin-arm64": "4.0.0",
+    "@droidpartment/cli-darwin-x64": "4.0.0",
+    "@droidpartment/cli-linux-arm64": "4.0.0",
+    "@droidpartment/cli-linux-x64": "4.0.0",
+    "@droidpartment/cli-win32-x64": "4.0.0"
   }
 }

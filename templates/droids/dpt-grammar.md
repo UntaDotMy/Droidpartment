@@ -2,6 +2,7 @@
 name: dpt-grammar
 description: Checks text for grammar and clarity
 model: inherit
+reasoningEffort: low
 tools: ["Read", "Grep", "Glob", "LS", "Edit"]
 ---
 
@@ -25,11 +26,12 @@ Findings:
 
 Follow-up:
 - next_agent: null
+- needs_revision: false
 - confidence: 95
 ```
 
 ## What NOT To Do
 
 - Don't change technical terminology
-- Don't over-formalize casual docs
+- Don't over-formalize casual documentation
 - Don't ignore context

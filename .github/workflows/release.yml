@@ -1,0 +1,237 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag to build (e.g. v4.0.0)'
+        required: true
+
+jobs:
+  build:
+    name: build ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-latest
+            asset: dpt
+            platform_pkg: linux-x64
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-latest
+            asset: dpt
+            platform_pkg: linux-arm64
+            cross: true
+          - target: x86_64-apple-darwin
+            runner: macos-latest
+            asset: dpt
+            platform_pkg: darwin-x64
+          - target: aarch64-apple-darwin
+            runner: macos-latest
+            asset: dpt
+            platform_pkg: darwin-arm64
+          - target: x86_64-pc-windows-msvc
+            runner: windows-latest
+            asset: dpt.exe
+            platform_pkg: win32-x64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust -> target
+
+      - name: Install cross
+        if: matrix.cross
+        run: cargo install cross --locked
+
+      - name: Build (cross)
+        if: matrix.cross
+        working-directory: rust
+        run: cross build --release --target ${{ matrix.target }} -p dpt-cli
+
+      - name: Build (cargo)
+        if: ${{ !matrix.cross }}
+        working-directory: rust
+        run: cargo build --release --target ${{ matrix.target }} -p dpt-cli
+
+      - name: Stage binary
+        shell: bash
+        run: |
+          mkdir -p staging
+          cp rust/target/${{ matrix.target }}/release/${{ matrix.asset }} staging/
+          cd staging
+          if [[ "${{ matrix.asset }}" == *.exe ]]; then
+            7z a "../dpt-${{ matrix.platform_pkg }}.zip" "${{ matrix.asset }}"
+          else
+            tar czf "../dpt-${{ matrix.platform_pkg }}.tar.gz" "${{ matrix.asset }}"
+          fi
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dpt-${{ matrix.platform_pkg }}
+          path: |
+            dpt-${{ matrix.platform_pkg }}.tar.gz
+            dpt-${{ matrix.platform_pkg }}.zip
+
+  release:
+    name: github release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - name: Flatten artifacts
+        run: |
+          mkdir -p release
+          find dist -type f \( -name "*.tar.gz" -o -name "*.zip" \) -exec cp {} release/ \;
+          ls -la release
+      - name: Generate checksums
+        run: |
+          cd release
+          sha256sum * > SHA256SUMS
+          cat SHA256SUMS
+      - name: Resolve version
+        id: ver
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          files: release/*
+          draft: false
+          generate_release_notes: true
+
+  publish-platform-pkgs:
+    name: publish @droidpartment/cli-${{ matrix.platform_pkg }}
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform_pkg: darwin-arm64
+            asset: dpt
+            os: darwin
+            cpu: arm64
+          - platform_pkg: darwin-x64
+            asset: dpt
+            os: darwin
+            cpu: x64
+          - platform_pkg: linux-arm64
+            asset: dpt
+            os: linux
+            cpu: arm64
+          - platform_pkg: linux-x64
+            asset: dpt
+            os: linux
+            cpu: x64
+          - platform_pkg: win32-x64
+            asset: dpt.exe
+            os: win32
+            cpu: x64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: 'https://registry.npmjs.org'
+      - uses: actions/download-artifact@v4
+        with:
+          name: dpt-${{ matrix.platform_pkg }}
+          path: tmp
+      - name: Extract binary
+        shell: bash
+        run: |
+          mkdir -p platform-packages/cli-${{ matrix.platform_pkg }}/bin
+          if [[ "${{ matrix.asset }}" == *.exe ]]; then
+            cd tmp && 7z x dpt-${{ matrix.platform_pkg }}.zip && cd ..
+            cp tmp/${{ matrix.asset }} platform-packages/cli-${{ matrix.platform_pkg }}/bin/
+          else
+            cd tmp && tar xzf dpt-${{ matrix.platform_pkg }}.tar.gz && cd ..
+            cp tmp/${{ matrix.asset }} platform-packages/cli-${{ matrix.platform_pkg }}/bin/
+            chmod +x platform-packages/cli-${{ matrix.platform_pkg }}/bin/${{ matrix.asset }}
+          fi
+      - name: Generate package.json
+        shell: bash
+        env:
+          PLATFORM: ${{ matrix.platform_pkg }}
+          OS: ${{ matrix.os }}
+          CPU: ${{ matrix.cpu }}
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+            VERSION="${VERSION#v}"
+          fi
+          cat > "platform-packages/cli-${PLATFORM}/package.json" <<EOF
+          {
+            "name": "@droidpartment/cli-${PLATFORM}",
+            "version": "${VERSION}",
+            "description": "Droidpartment dpt binary for ${OS}-${CPU}",
+            "license": "MIT",
+            "repository": "github:UntaDotMy/Droidpartment",
+            "os": ["${OS}"],
+            "cpu": ["${CPU}"],
+            "files": ["bin"]
+          }
+          EOF
+          cat "platform-packages/cli-${PLATFORM}/package.json"
+      - name: Publish to npm
+        working-directory: platform-packages/cli-${{ matrix.platform_pkg }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
+
+  publish-main:
+    name: publish droidpartment
+    needs: publish-platform-pkgs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: 'https://registry.npmjs.org'
+      - name: Sync version into package.json
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+            VERSION="${VERSION#v}"
+          fi
+          node -e "
+          const fs = require('fs');
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          pkg.version = '${VERSION}';
+          for (const k of Object.keys(pkg.optionalDependencies || {})) {
+            pkg.optionalDependencies[k] = '${VERSION}';
+          }
+          fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));
+          "
+          cat package.json
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public

@@ -1,216 +1,92 @@
-# AGENTS.md - MANDATORY INSTRUCTIONS
+# Droidpartment v4 active
+
+This file is installed at `~/.factory/AGENTS.md`. Project-level `./AGENTS.md` always wins on conflicting rules (per [Droid AGENTS.md docs](https://docs.factory.ai/cli/configuration/agents-md.md)).
+
+## What is wired
+
+- Native binary at `~/.factory/bin/dpt(.exe)`. Run `dpt --help` for surfaces.
+- 9 hooks registered in `~/.factory/settings.json` per [Droid hooks reference](https://docs.factory.ai/reference/hooks-reference.md):
+  - `SessionStart` injects this contract + a deterministic `[ProjectMemory: <abs path>]` marker.
+  - `UserPromptSubmit` injects sub-droid suggestions when prompt keywords match (audit, bug, feature, security, perf, etc.). Aggressive matching, advisory only.
+  - `PreToolUse` auto-rewrites noisy `Execute` commands through `dpt run --` for compaction. On `Task`: hard-denies a 4th revision attempt against any audit lane (cap = 3 rounds per lane per project), and marks the matching STORIES.md row `in_progress`.
+  - `PostToolUse` records stats. On `TodoWrite`: re-emits a fresh plan summary and persists todos to a session-scoped file. On `Task`: parses `Follow-up:` signals (`needs_revision`, `revision_agent`, `revision_reason`, `next_agent`, `confidence`), updates the matching STORIES.md row, manages the revision counter, and injects wave progress + the next `[P]` Task() calls.
+  - `Stop` reads STORIES.md and the session todos snapshot. Returns `decision: block` with row details when work remains. Honors `stop_hook_active` to avoid loops.
+  - `SubagentStop`, `SessionEnd`, `PreCompact`, `Notification` are silent (zero per-turn token cost).
+- 18 specialist sub-droids in `~/.factory/droids/dpt-*.md`, invoked via the `Task` tool.
+- 5 skill bundles in `~/.factory/skills/`.
+- YAML learning data under `~/.factory/memory/` (preserved across updates).
+- Revision state in `~/.factory/memory/stats/revision_state.json` (per-lane per-project counter).
+
+## Token saver
+
+The `PreToolUse` hook auto-rewrites noisy commands (test/build/lint/grep/git/docker/etc.) to run through `dpt run --`. The compactor captures full output to `~/.factory/raw-output/<date>/<id>/`, applies a semantic adapter, and returns a short summary. Recover full output with `dpt raw <id>`. Track savings with `dpt stats`, `dpt stats --by-adapter`, `dpt stats --daily`.
+
+Token counts are exact via `tiktoken-rs` (`o200k_base` BPE). Configurable in `~/.factory/dpt-config.json`: `tokenSaver.mode` is `rewrite` (default), `deny`, or `off`. `tokenSaver.excludeCommands` is a per-command opt-out.
+
+Cache framing: the SessionStart `additionalContext` is the only Droid-documented "load once per session" surface ([Droid hooks reference](https://docs.factory.ai/reference/hooks-reference.md)). Beyond that, prompt-cache TTL/breakpoint specifics are vendor-side and not promised by Factory docs. We keep per-turn hooks silent so each turn's transcript stays small.
+
+## Sub-droid roster
+
+The orchestrator (this assistant) is the only thing that can issue `Task()` calls. Sub-droids run in isolated context windows ([Custom Droids docs](https://docs.factory.ai/cli/configuration/custom-droids.md)), return a `Follow-up:` text contract, and the orchestrator routes the next call. **There is no automatic dispatch.**
+
+| Group   | Droids                                                                       |
+|---------|------------------------------------------------------------------------------|
+| Memory  | `dpt-memory`, `dpt-output`                                                   |
+| Plan    | `dpt-product`, `dpt-research`, `dpt-arch`, `dpt-scrum`                       |
+| Build   | `dpt-dev`, `dpt-data`, `dpt-api`, `dpt-ux`, `dpt-ops`                        |
+| Audit   | `dpt-qa`, `dpt-sec`, `dpt-perf`, `dpt-lead`, `dpt-review`                    |
+| Docs    | `dpt-docs`, `dpt-grammar`                                                    |
+
+Use `[P]` for parallel-safe Task() batches, `[S]` for sequential-only steps.
+
+## Operating contract
+
+1. **Project AGENTS.md and README.md win.** This file is the personal-scope baseline.
+2. **Iterative loop** for non-trivial work: Memory(START) -> Research -> Plan/Spec -> Implement -> Test -> Audit -> Memory(END) -> Output. Each step is a sub-droid; you decide whether to invoke based on scope.
+3. **Research before code in unfamiliar territory.** Route through `dpt-research` for current best practices and official docs.
+4. **Hook rerun discipline.** If `PreToolUse` denies with `Rerun that as: <cmd>`, run that exact command. It is not a failure.
+5. **TodoWrite is the live ledger.** Use it for any multi-step task: mark items `[in_progress]` before starting, `[completed]` immediately after each finishes. The PostToolUse hook re-injects the current plan after every TodoWrite call.
+6. **Completion reconciliation.** Before final answer, re-read the user's brief and confirm every explicit requirement has evidence (test passing, file changed, command run). Partial work is not done.
+7. **Restart Droid CLI** after `npx droidpartment install` or `update` so hook changes take effect.
+
+## Wave + revision loop (enforced by hooks)
+
+For multi-component work the orchestrator drives waves directly via Task() batching. The hook layer enforces the workflow shape so you cannot accidentally skip steps:
+
+- `dpt-scrum` writes `<ProjectMemory>/artifacts/STORIES.md` with the schema `| ID | Wave | Type | Agent | Task | Depends | Status |`. Status values: `pending | in_progress | done | needs_revision | blocked`.
+- The hook layer mutates `Status` automatically: `pending` -> `in_progress` (PreToolUse:Task) -> `done` or `needs_revision` (PostToolUse:Task signal parsing). Parallel `[P]` waves with the same agent are handled correctly because each transition picks the first matching row.
+- Audit lanes (`dpt-qa`, `dpt-sec`, `dpt-perf`, `dpt-lead`, `dpt-review`) signal `needs_revision: <bool>` plus optional `revision_agent` (default `dpt-dev`) and `revision_reason` in their `Follow-up:` block. PostToolUse parses both the text form and JSON object form.
+- Hard cap: 3 rounds per `(project, lane)`. The 4th `Task('<audit-lane>')` call is denied at PreToolUse with `permissionDecision: deny`. Counter persists in `~/.factory/memory/stats/revision_state.json`. A successful audit (`needs_revision: false`) resets the counter.
+- After every `Task` returns, PostToolUse injects wave progress (`Wave 3/5 [DESIGN]: 1/3 done, 1 in_progress`) plus the next `[P]` Task() calls so wave advancement is concrete.
+- `Stop` blocks termination while STORIES.md or session todos contain unfinished work, unless `stop_hook_active=true` (Droid loop-prevention contract).
+
+Hooks cannot synthesize Task() calls (Factory contract limitation). The orchestrator is still responsible for issuing the actual `Task()`, but the hook layer enforces the workflow around it: status mutates, the cap is real, Stop blocks, advisory hints route attention.
+
+For multi-feature projects with milestones, prefer Droid's official `/missions` ([Missions docs](https://docs.factory.ai/cli/features/missions.md)). For plan-heavy single-feature work, prefer Droid's `/spec` (Shift+Tab; [Specification Mode docs](https://docs.factory.ai/cli/user-guides/specification-mode.md)). For massive refactors (>30 files or >5 phases), prefer fresh sessions per phase ([Implementing Large Features](https://docs.factory.ai/cli/user-guides/implementing-large-features.md)).
+
+## Useful commands
 
 ```
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                                                                              ║
-║  🚨 STOP! READ THIS BEFORE DOING ANYTHING! 🚨                                ║
-║                                                                              ║
-║  YOU MUST USE DROIDPARTMENT AGENTS FOR ALL TASKS.                           ║
-║                                                                              ║
-║  ⛔ FORBIDDEN:                                                               ║
-║     • Writing code directly                                                 ║
-║     • Reading/analyzing files directly                                      ║
-║     • Doing ANY work without calling Task() first                           ║
-║                                                                              ║
-║  ✅ REQUIRED:                                                                ║
-║     • FIRST call: Task(subagent_type: "dpt-memory", prompt: "START: ...")   ║
-║     • Delegate ALL work to dpt-* agents via Task()                          ║
-║     • LAST call: Task(subagent_type: "dpt-output", prompt: "summarize")     ║
-║                                                                              ║
-║  YOUR ONLY JOB IS TO ORCHESTRATE TASK() CALLS.                              ║
-║  THE AGENTS DO THE ACTUAL WORK.                                             ║
-║                                                                              ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+npx droidpartment status     # version, hooks, savings
+npx droidpartment doctor     # full health check
+dpt stats                    # cumulative compaction stats
+dpt stats --by-adapter --daily
+dpt raw <id>                 # recover full output of a compacted run
+dpt config                   # show resolved config
 ```
 
-## What is Droidpartment?
+Native Droid commands: `/cost`, `/compact`, `/spec`, `/missions`, `/readiness-report`, `/hooks`.
 
-**Droidpartment** is 18 specialized AI agents that you MUST delegate work to.
-You are the orchestrator. They are the workers. Call them via `Task()`.
-
-## MANDATORY: First Action for ANY Task
-
-### Quick Start
-
-```javascript
-// Simple task
-Task(dpt-memory, "START: [your task]")
-Task(dpt-dev, "[implement your task]")
-Task(dpt-qa, "[verify implementation]")
-Task(dpt-memory, "END: [lessons learned]")
-Task(dpt-output, "summarize results")
-```
-
-### Complex Task (Wave Execution)
-
-```javascript
-// Wave 1: Initialize
-Task(dpt-memory, "START: [feature name]")
-Task(dpt-research, "[research best practices]")
-
-// Wave 2: Plan
-Task(dpt-product, "create PRD.md for [feature]")
-
-// Wave 3: Design
-Task(dpt-arch, "create ARCHITECTURE.md")
-
-// Wave 4: Breakdown
-Task(dpt-scrum, "break down into stories with [P]/[S] markers")
-
-// Wave 5: Implement (parallel)
-Task(dpt-dev, "[component 1]")
-Task(dpt-dev, "[component 2]")
-
-// Wave 6: Audit (parallel)
-Task(dpt-qa, "[test]")
-Task(dpt-sec, "[security audit]")
-Task(dpt-lead, "[code review]")
-
-// Wave 7: Finalize
-Task(dpt-memory, "END: [capture lessons]")
-Task(dpt-output, "synthesize final report")
-```
-
-## Available Agents (18 Total)
-
-### Core Agents
-| Agent | Expertise | When to Use |
-|-------|-----------|-------------|
-| `dpt-memory` | PDCA learning, lessons, patterns | ALWAYS first (START) and near-last (END) |
-| `dpt-output` | Report synthesis | ALWAYS last |
-
-### Planning Agents
-| Agent | Expertise | When to Use |
-|-------|-----------|-------------|
-| `dpt-product` | PRD.md, requirements, user stories | Complex features needing spec |
-| `dpt-scrum` | Task breakdown, [P]/[S] markers | Breaking complex work into tasks |
-| `dpt-research` | Multi-hop research, official docs | Need best practices or solutions |
-
-### Design Agents
-| Agent | Expertise | When to Use |
-|-------|-----------|-------------|
-| `dpt-arch` | ARCHITECTURE.md, patterns | System design, component structure |
-| `dpt-api` | REST endpoints, OpenAPI | API design |
-| `dpt-data` | Database schemas, queries | Database work |
-| `dpt-ux` | UI/UX, accessibility | Frontend design |
-
-### Implementation Agents
-| Agent | Expertise | When to Use |
-|-------|-----------|-------------|
-| `dpt-dev` | Code implementation, tests | Writing code |
-| `dpt-ops` | CI/CD, Docker, deployment | DevOps tasks |
-
-### Quality Agents (Run in Parallel)
-| Agent | Expertise | When to Use |
-|-------|-----------|-------------|
-| `dpt-qa` | Testing, verification | After implementation |
-| `dpt-sec` | OWASP, security audit | Security-sensitive code |
-| `dpt-perf` | Performance optimization | Performance concerns |
-| `dpt-lead` | Code review, standards | Code quality check |
-| `dpt-review` | Simplicity check | Over-engineering concerns |
-
-### Documentation Agents
-| Agent | Expertise | When to Use |
-|-------|-----------|-------------|
-| `dpt-docs` | README, guides | Documentation tasks |
-| `dpt-grammar` | Writing quality | Text improvement |
-
-## Parallel Execution Markers
-
-When breaking down tasks, use:
-- `[P]` = Parallel (can run simultaneously)
-- `[S]` = Sequential (must wait for previous)
-
-Example:
-```
-[P] dpt-qa    (audit)
-[P] dpt-sec   (audit)
-[P] dpt-lead  (audit)
-[S] dpt-dev   (fix issues from audits)
-```
-
-## Artifacts Location
-
-All artifacts are stored in project memory, NOT in user's project:
-```
-~/.factory/memory/projects/{project}/artifacts/
-  ├── PRD.md           (from dpt-product)
-  ├── ARCHITECTURE.md  (from dpt-arch)
-  └── STORIES.md       (from dpt-scrum)
-```
-
-## Hooks (Automatic)
-
-These run automatically - no action needed:
-- `SessionStart` - Initializes project memory
-- `UserPromptSubmit` - Detects task complexity
-- `PostToolUse` - Tracks file changes
-- `SubagentStop` - Captures mistakes
-- `SessionEnd` - Saves session for resume
-- `PreToolUse` - Validates operations
-
-## Skills Available
+## Layout
 
 ```
-droidpartment           # Main orchestration
-droidpartment-fullstack # Full wave workflow
-droidpartment-audit     # Security/quality audit
-droidpartment-bugfix    # Bug fixing workflow
-droidpartment-research  # Research workflow
-bug-sweep               # Codebase bug scan
-codebase-analysis       # Analyze codebase
-memory                  # Memory operations
-```
-
-## Output Format
-
-All agents use this format:
-```
-Summary: [One line summary]
-
-Findings:
-- [Finding 1]
-- [Finding 2]
-
-Follow-up:
-- next_agent: [agent name or null]
-- confidence: [0-100]
-```
-
-## Rules for This Codebase
-
-1. **Use Droidpartment agents** - Don't work alone, delegate to experts
-2. **Start with dpt-memory** - Always initialize context
-3. **End with dpt-output** - Always synthesize results
-4. **Run audits in parallel** - dpt-qa, dpt-sec, dpt-lead together
-5. **Use artifacts** - Let agents create PRD, ARCHITECTURE, STORIES
-6. **Check project memory** - Read `~/.factory/memory/context_index.json`
-
-## Example: Bug Fix
-
-```javascript
-Task(dpt-memory, "START: fix login timeout issue")
-Task(dpt-dev, "investigate and fix login timeout")
-Task(dpt-qa, "verify fix works")
-Task(dpt-sec, "ensure no security regression")
-Task(dpt-memory, "END: timeout fixed, root cause documented")
-Task(dpt-output, "summarize bug fix")
-```
-
-## Example: New Feature
-
-```javascript
-Task(dpt-memory, "START: add user notifications")
-Task(dpt-research, "notification patterns, real-time options")
-Task(dpt-product, "create PRD.md for notifications")
-Task(dpt-arch, "design notification architecture")
-Task(dpt-scrum, "break into stories")
-Task(dpt-dev, "implement notification service")
-Task(dpt-dev, "implement UI components")
-Task(dpt-qa, "test notification flows")
-Task(dpt-sec, "audit notification security")
-Task(dpt-lead, "review code quality")
-Task(dpt-docs, "document notification API")
-Task(dpt-memory, "END: notifications complete")
-Task(dpt-output, "final report")
+~/.factory/
+  bin/dpt(.exe)               native binary
+  droids/dpt-*.md             18 sub-droid definitions
+  skills/                     5 skill bundles
+  memory/                     YAML learning + per-project memory
+  raw-output/<date>/<id>/     compacted-run recovery (auto-pruned)
+  AGENTS.md                   this file
+  settings.json               hook registrations
+  dpt-config.json             token saver + behavior config
 ```

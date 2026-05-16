@@ -5,6 +5,121 @@ All notable changes to Droidpartment are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.0] - 2026-05-17
+
+Major v4 release. First v4 published to npm. Replaces the v3.x Python hook layer with a native Rust binary, introduces the token saver, and adds real wave-execution automation enforced by the hook layer.
+
+### Compliance review against official Droid hooks reference
+
+Cross-referenced the implementation against [Droid hooks reference](https://docs.factory.ai/reference/hooks-reference.md) and [Custom Droids docs](https://docs.factory.ai/cli/configuration/custom-droids). Found and fixed four gaps:
+
+- **Critical: `subagent_type` extraction.** Per Custom Droids docs, `subagent_type` is a parameter on the `Task` tool, so it lives inside `tool_input`. Our hook code was reading `input.subagent_type` as a top-level field, which is always `None` in real Droid payloads. New `extract_subagent_type` helper checks both locations (tool_input first per spec, top-level as test/fallback).
+- **High: file locking with `fs2`.** Hooks reference: "All matching hooks run in parallel". STORIES.md mutations and `revision_state.json` updates need exclusive locks around the read-modify-write cycle to avoid lost updates and same-row-marked-twice races on parallel `[P]` waves. New `flock` module wraps `fs2::FileExt::lock_exclusive` with a sidecar `<path>.lock` file. Wired into both story syncing and revision counter ops.
+- **Medium: TodoWrite string-form support.** TodoWrite documents `todos` as a "numbered multi-line string with status markers". Our `summarize_todos` previously only handled the array form. New `parse_todos` accepts both shapes and a status-alias normalizer (`todo`/`open` -> `pending`, `doing`/`wip` -> `in_progress`, `done`/`complete` -> `completed`). Session-todos persistence and Stop backstop also handle both shapes.
+- **Low: stderr logging in `read_stdin_json`.** Hooks reference: "Use `droid --debug` to see hook execution details". JSON parse failures and stdin read errors now emit a one-line `dpt-hook: ...` message to stderr so they're diagnosable instead of silently turning into no-ops.
+
+Verified end-to-end: real-Droid-shaped payloads (`tool_input.subagent_type`) now mutate STORIES.md, increment the revision counter, and inject wave progress correctly. Concurrent-writer test in `flock` confirms exclusive lock serializes 8 parallel increments without lost updates.
+
+### Real wave automation (Scope C)
+
+The hook layer now enforces the workflow shape instead of trusting the orchestrator to follow instructions. Hooks still cannot synthesize `Task()` calls (Factory contract limitation), but everything else around the calls is now load-bearing in code.
+
+- **`UserPromptSubmit` advisory.** Aggressive keyword matcher returns 1-3 sub-droid suggestions when the prompt mentions audit/bug/feature/security/perf/architecture/api/data/ux/ops/docs/grammar/planning. Output as `additionalContext`. New module `advisory.rs` with 8 unit tests.
+- **`PreToolUse:Task` revision-cap hard deny.** Audit lanes (`dpt-qa`, `dpt-sec`, `dpt-perf`, `dpt-lead`, `dpt-review`) get a persistent counter per `(project_slug, lane)` in `~/.factory/memory/stats/revision_state.json`. The 4th attempt returns `permissionDecision: deny`. Counter resets when the lane returns `needs_revision: false`. New module `revision.rs` with 6 unit tests.
+- **STORIES.md state machine.** `PreToolUse:Task` flips the matching row `pending` -> `in_progress`. `PostToolUse:Task` parses `Follow-up:` signals (text form and JSON object form, including Anthropic-shaped `content[].text`) and flips the row to `done` or `needs_revision`. Parallel `[P]` waves with the same agent are handled correctly because each transition picks the first matching row in the appropriate state. New module `stories.rs` with 8 unit tests.
+- **Wave progress injection.** After every Task returns, PostToolUse computes the lowest unfinished wave, counts of done/pending/in_progress/needs_revision, and the next `[P]` Task() calls. Injected as `additionalContext`.
+- **Session todos persistence.** PostToolUse:TodoWrite saves todos to `~/.factory/memory/sessions/<session_id>/todos.json`. Stop reads it as a backstop alongside STORIES.md.
+- **Stop dual-source backstop.** Block reasons now come from either STORIES.md unfinished rows OR session todos pending/in_progress; whichever fires first.
+- **HookInput extended** with `tool_response`, `prompt`, and `session_id` (all optional, backward compatible with hook payloads that omit them).
+- **`paths::project_slug`** exposes the deterministic slug derivation that backs both the project-memory path and the revision-state key.
+
+`OPERATING_CONTRACT` rewritten to honestly describe what the hook layer enforces vs what it merely advises. `templates/AGENTS.md` and `README.md` updated to match.
+
+End-to-end smoke-tested: 3 `needs_revision` rounds bumped the counter to 3 and the 4th call returned `decision: deny`; STORIES.md row flipped through the full state machine; wave progress injected correctly; advisory fired on relevant prompts and stayed silent on unrelated ones.
+
+### Test coverage
+
+- 60 Rust unit tests pass (was 28; +32 new across `stories`, `advisory`, `revision`, `hooks`).
+- 84 installer integration tests pass (unchanged).
+- `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test --all`, `cargo build --release` all green.
+
+---
+
+---
+
+### Original v4 architecture (Rust rewrite)
+
+Major architecture rewrite. Python hook layer replaced with a native Rust binary; npm distribution moves to platform-specific `optionalDependencies`. Hooks are realigned with Factory's official hooks reference for prompt-cache hygiene. Adds the token saver as the headline feature.
+
+Token counts are exact (`o200k_base` BPE via `tiktoken-rs`), not estimates. Adapters, hooks, configuration, and the installer ship with unit + end-to-end tests; nothing is stub or stale. Source-cited research artifacts at `<ProjectMemory>/artifacts/RESEARCH.md` and `ARCHITECTURE.md` document what is wired vs claimed.
+
+### Wave execution + revision loop
+
+Honest text-contract orchestration aligned with the [Droid hooks reference](https://docs.factory.ai/reference/hooks-reference.md), [Specification Mode](https://docs.factory.ai/cli/user-guides/specification-mode.md), and [Missions](https://docs.factory.ai/cli/features/missions.md):
+
+- `dpt-scrum` writes `<ProjectMemory>/artifacts/STORIES.md` with a `Status` column (`pending|in_progress|done|needs_revision|blocked`). Orchestrator batches `[P]` rows in one turn, advances when all return.
+- Audit lanes return `needs_revision: <bool>` + `revision_agent`. Orchestrator routes the revision then re-invokes the audit lane. Hard cap of 3 revision rounds per lane.
+- `Stop` hook reads STORIES.md and returns `decision: block` with a reason listing unfinished rows. Honors `stop_hook_active` (per Droid docs) so it never loops infinitely.
+- `PostToolUse:TodoWrite` hook re-injects a fresh plan summary on every TodoWrite call so the orchestrator sees current todo state every turn. Format: `Plan: X/Y completed, Z in progress. Current: <task>`.
+- Sub-droid prompts cleaned of pretended capabilities (`Topology: star`, "feedback loop where dpt-review verifies until approved", "Loop Support: continue until all pass", magic-phrase memory init). The text-contract design replaces them with honest mechanics.
+
+### Breaking changes
+
+- **Runtime is Rust, not Python.** `~/.factory/memory/hooks/*.py` and `~/.factory/memory/*.py` are removed on update. The `dpt` binary lives at `~/.factory/bin/dpt(.exe)`.
+- `~/.factory/settings.json` hooks call `dpt hook <event>` instead of `python <path>/hook-*.py`. Surgical merge: only entries whose command matches `dpt hook` (or legacy `hook-*.py`) are touched, everything else is preserved.
+- The `~/.factory/memory/context_index.json`, `shared_context.json`, and `agent_outputs.json` cache files are no longer generated. Sub-droids use `Grep`/`Glob`/`LS` against the actual codebase.
+- Slash commands removed (`/dpt-stats`, `/dpt-doctor`, `/dpt-tokens`, `/dpt-clear-raw`, `/dpt-run`). Per the user's "automated, not manual or slash command" directive.
+- Token stats schema: `tokens_in_estimate`/`tokens_out_estimate`/`tokens_saved_estimate` -> `tokens_in`/`tokens_out`/`tokens_saved` (exact counts).
+- `compactionStats.by_day` map added for `dpt stats --daily`.
+
+### Added
+
+- **Token saver: `dpt run -- <cmd>`.** Runs noisy commands (test/build/lint/grep/git/docker/etc.), captures full output to `~/.factory/raw-output/<date>/<id>/`, applies a semantic adapter, returns a compact summary plus a recovery id.
+- **Real tokenization.** `tiktoken-rs` with `o200k_base` BPE produces exact `tokens_in`/`tokens_out`/`tokens_saved` for every run.
+- **`dpt stats --by-adapter --daily`** for per-adapter and per-day analytics.
+- **`dpt run` argv passthrough.** `Command::new(argv[0]).args(...)` instead of `sh -c` / `cmd /C`. Eliminates double-shell-eval where `$(...)` literals would re-expand.
+- **PreToolUse auto-rewrite** via `permissionDecision: allow` + `updatedInput.command`.
+- **All 9 hook events wired**: `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `Stop`, `SubagentStop`, `SessionEnd`, `PreCompact`, `Notification`.
+- **5 skill bundles**: `droidpartment`, `dpt-token-saver`, `dpt-bugfix`, `dpt-audit`, `dpt-fullstack`.
+- **Plugin manifest** in `templates/plugin/.factory-plugin/plugin.json`.
+- **Custom droid frontmatter alignment**: `reasoningEffort` and Droid tool category strings.
+- **Atomic stats writes** (temp+rename) and advisory file lock in `update_locked` for parallel sub-droid safety.
+- **Backup retention**: keep last 3 timestamped backups, 0o600 mode on POSIX.
+- **Delta-patch cleanup**: installer removes files dropped from new templates on update.
+- **`settings.local.json` overlay** honored for `hooksDisabled`.
+- **Exclude-commands config**: `tokenSaver.excludeCommands` for per-command opt-outs.
+- **`[ProjectMemory: <abs>]` injection** by SessionStart, derived deterministically from cwd.
+- **GitHub Actions release pipeline**: 5-platform Rust matrix, npm `optionalDependencies`, `cargo audit` security scan, dependabot for cargo + npm + actions.
+- **`npx droidpartment doctor`**: full health diagnostics.
+- **28 Rust unit tests + 84 installer integration tests + audit-unused.js script.**
+
+### Changed
+
+- Hook lifecycle is **silent by default** for `UserPromptSubmit`, `Stop` (when no STORIES.md or no open rows), `SubagentStop`, `SessionEnd`, `PreCompact`, `Notification`. Per [Droid hooks reference](https://docs.factory.ai/reference/hooks-reference.md), output written by post-prompt-cache events lands after the cache breakpoint.
+- `OPERATING_CONTRACT` rewritten to be honest about the text contract and explicit "no automatic dispatch".
+- `templates/AGENTS.md` rewritten with Droid doctrine pieces from claude_core comparison: iterative loop, research-first, hook rerun discipline, completion reconciliation. Stays under the [Droid 150-line guideline](https://docs.factory.ai/cli/configuration/agents-md.md).
+- Installer is fully non-interactive (no `readline`/`prompt`); all flags work without TTY.
+
+### Removed
+
+- Python hook scripts (`templates/hooks/*.py`).
+- Python memory modules (`templates/memory/{cache_manager,context_index,shared_context,workflow_state}.py`).
+- 5 slash command files (`/dpt-*` removed; manual surface eliminated).
+- All `#[allow(dead_code)]` markers in Rust source.
+- Unused `prompt()` + `readline` import in install.js.
+- Dead `HookConfig` struct (6 silent flag fields gated no-ops).
+- Dead `HookOutput.suppress_output`, `HookInput.hook_event_name`/`prompt`/`session_id`/`reason` fields.
+- Hand-rolled JSONC comment stripper (rare case; users fix JSONC manually).
+- Per-file md5 hashes in manifest (computed but never validated).
+- Manifest dead arrays (`binaryPath`, `hooksRegistered`).
+- Pretended sub-droid behaviors: `Topology: star`, "Loop Support: continue until all pass", "Feedback Loop where dpt-review verifies until approved", magic-phrase memory init, `start_loop`/`loop_topic` brainstorm signals.
+
+### Migration
+
+Run `npx droidpartment update` from any v3 install. The installer preserves your `customModels`, `enabledPlugins`, `sessionDefaultSettings`, `compactionTokenLimit`, and learning YAMLs verbatim while removing the Python layer.
+
+---
+
 ## [3.2.17] - 2025-12-09
 
 ### 🌊 Wave Orchestration + Loop System Fully Wired

@@ -1,62 +1,23 @@
 #!/usr/bin/env node
-/**
- * Droidpartment CLI Installer v2.0 - MANIFEST-BASED
- * 
- * Features:
- *   - Tracks all installed files with MD5 hashes
- *   - Clean uninstall removes exactly what was installed
- *   - Update detects and removes stale files from old versions
- *   - Settings.json modifications are tracked and reversible
- * 
- * Commands:
- *   npx droidpartment                 # Interactive install/update
- *   npx droidpartment install         # Install to ~/.factory
- *   npx droidpartment update          # Update existing installation
- *   npx droidpartment uninstall       # Remove installation
- *   npx droidpartment status          # Check installation status
- *   npx droidpartment reinstall       # Uninstall + fresh install
- *   npx droidpartment memory          # Manage memory files
- * 
- * Flags:
- *   -y, --yes          Auto-confirm all prompts
- *   -q, --quiet        Minimal output
- *   -v, --verbose      Detailed output
- *   --project          Install to ./.factory instead of ~/.factory
- *   --force            Force overwrite even if same version
- *   --dry-run          Show what would happen without making changes
- *   --purge            Delete memory when uninstalling
- *   --version          Show version
- *   --help             Show help
- * 
- * Exit codes:
- *   0 = Success
- *   1 = General error
- *   2 = Invalid arguments
- *   3 = Not installed (for status/update/uninstall)
- *   4 = Already installed (for install without --force)
- */
+// Droidpartment v4 installer. See README.md for behavior; CHANGELOG.md for history.
+'use strict';
 
 const fs = require('fs');
 const path = require('path');
-const crypto = require('crypto');
-const readline = require('readline');
+const os = require('os');
+const { spawnSync } = require('child_process');
 
-// === CONFIGURATION ===
-const TEMPLATES_DIR = path.join(__dirname, '..', 'templates');
-const PERSONAL_DIR = path.join(process.env.HOME || process.env.USERPROFILE, '.factory');
-const PROJECT_DIR = path.join(process.cwd(), '.factory');
-const MANIFEST_FILE = '.droidpartment-manifest.json';
-
-// Get version from package.json
 const PACKAGE_JSON = require(path.join(__dirname, '..', 'package.json'));
 const CURRENT_VERSION = PACKAGE_JSON.version;
+const TEMPLATES_DIR = path.join(__dirname, '..', 'templates');
+const PERSONAL_DIR = path.join(process.env.HOME || process.env.USERPROFILE || os.homedir(), '.factory');
+const PROJECT_DIR = path.join(process.cwd(), '.factory');
+const MANIFEST_FILE = '.droidpartment-manifest.json';
+const VERSION_FILE = '.droidpartment-version';
+const BACKUP_RETAIN = 3;
 
-// Exit codes (following CLI best practices)
-const EXIT_SUCCESS = 0;
+const EXIT_OK = 0;
 const EXIT_ERROR = 1;
-const EXIT_INVALID_ARGS = 2;
-const EXIT_NOT_INSTALLED = 3;
-const EXIT_ALREADY_INSTALLED = 4;
 
 const COLORS = {
     reset: '\x1b[0m',
@@ -67,1819 +28,937 @@ const COLORS = {
     blue: '\x1b[34m',
     cyan: '\x1b[36m',
     red: '\x1b[31m',
-    gray: '\x1b[90m'
+    gray: '\x1b[90m',
 };
 
-// Logging with verbosity levels
-let VERBOSITY = 1; // 0=quiet, 1=normal, 2=verbose
+let VERBOSITY = 1;
 let DRY_RUN = false;
 
 const log = {
-    info: (msg) => VERBOSITY >= 1 && console.log(`${COLORS.blue}ℹ${COLORS.reset} ${msg}`),
-    success: (msg) => VERBOSITY >= 1 && console.log(`${COLORS.green}✓${COLORS.reset} ${msg}`),
-    warn: (msg) => VERBOSITY >= 1 && console.log(`${COLORS.yellow}⚠${COLORS.reset} ${msg}`),
-    error: (msg) => console.error(`${COLORS.red}✗${COLORS.reset} ${msg}`), // Always show errors
-    header: (msg) => VERBOSITY >= 1 && console.log(`\n${COLORS.bright}${COLORS.cyan}${msg}${COLORS.reset}\n`),
-    verbose: (msg) => VERBOSITY >= 2 && console.log(`${COLORS.gray}  ${msg}${COLORS.reset}`),
-    dryRun: (msg) => DRY_RUN && console.log(`${COLORS.yellow}[DRY-RUN]${COLORS.reset} ${msg}`)
+    info: msg => VERBOSITY >= 1 && console.log(`${COLORS.blue}i${COLORS.reset} ${msg}`),
+    ok: msg => VERBOSITY >= 1 && console.log(`${COLORS.green}+${COLORS.reset} ${msg}`),
+    warn: msg => VERBOSITY >= 1 && console.log(`${COLORS.yellow}!${COLORS.reset} ${msg}`),
+    err: msg => console.error(`${COLORS.red}x${COLORS.reset} ${msg}`),
+    head: msg => VERBOSITY >= 1 && console.log(`\n${COLORS.bright}${COLORS.cyan}${msg}${COLORS.reset}\n`),
+    verbose: msg => VERBOSITY >= 2 && console.log(`${COLORS.gray}  ${msg}${COLORS.reset}`),
+    dry: msg => DRY_RUN && console.log(`${COLORS.yellow}[dry-run]${COLORS.reset} ${msg}`),
 };
 
-// === MANIFEST SYSTEM ===
-// The manifest tracks every file we install so we can cleanly remove them
-
-function getFileHash(filePath) {
-    if (!fs.existsSync(filePath)) return null;
-    const content = fs.readFileSync(filePath);
-    return crypto.createHash('md5').update(content).digest('hex');
-}
-
-function loadManifest(targetDir) {
-    const manifestPath = path.join(targetDir, MANIFEST_FILE);
-    if (fs.existsSync(manifestPath)) {
-        try {
-            return JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-        } catch (e) {
-            return null;
-        }
-    }
-    return null;
-}
-
-function saveManifest(targetDir, manifest) {
-    const manifestPath = path.join(targetDir, MANIFEST_FILE);
-    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
-}
-
-function createManifest(version) {
-    return {
-        version: version,
-        installedAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        files: {},           // relativePath -> { hash, size, type }
-        directories: [],     // directories we created
-        settingsModified: false,
-        hooksRegistered: []
-    };
-}
-
 function ensureDir(dir) {
+    if (DRY_RUN) {
+        log.dry(`mkdir ${dir}`);
+        return;
+    }
     if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
     }
 }
 
-// Copy directory and track all files in manifest
-function copyDirWithManifest(src, dest, manifest, baseDir) {
-    ensureDir(dest);
-    const entries = fs.readdirSync(src, { withFileTypes: true });
-    let copied = 0;
-    
-    // Track the directory itself
-    const relDir = path.relative(baseDir, dest);
-    if (relDir && !manifest.directories.includes(relDir)) {
-        manifest.directories.push(relDir);
-    }
-    
-    for (const entry of entries) {
-        const srcPath = path.join(src, entry.name);
-        const destPath = path.join(dest, entry.name);
-        
-        if (entry.isDirectory()) {
-            copied += copyDirWithManifest(srcPath, destPath, manifest, baseDir);
-        } else {
-            // DON'T overwrite learning files if they exist (preserve user data)
-            const learningFiles = ['lessons.yaml', 'mistakes.yaml', 'patterns.yaml', 'stats.yaml'];
-            const isLearningFile = learningFiles.includes(entry.name);
-            
-            if (isLearningFile && fs.existsSync(destPath)) {
-                // Skip - preserve existing learning data
-                // But still track in manifest
-                const relPath = path.relative(baseDir, destPath);
-                const hash = getFileHash(destPath);
-                const stats = fs.statSync(destPath);
-                manifest.files[relPath] = { hash, size: stats.size, type: 'yaml' };
-            } else {
-                fs.copyFileSync(srcPath, destPath);
-                copied++;
-            }
-            
-            // Track file in manifest
-            const relPath = path.relative(baseDir, destPath);
-            const hash = getFileHash(destPath);
-            const stats = fs.statSync(destPath);
-            
-            manifest.files[relPath] = {
-                hash: hash,
-                size: stats.size,
-                type: path.extname(entry.name).slice(1) || 'unknown'
-            };
-        }
-    }
-    return copied;
+function loadManifest(targetDir) {
+    const p = path.join(targetDir, MANIFEST_FILE);
+    if (!fs.existsSync(p)) return null;
+    try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return null; }
 }
 
-// Copy single file and track in manifest
-function copyFileWithManifest(src, dest, manifest, baseDir) {
-    fs.copyFileSync(src, dest);
-    
-    const relPath = path.relative(baseDir, dest);
-    const hash = getFileHash(dest);
-    const stats = fs.statSync(dest);
-    
-    manifest.files[relPath] = {
-        hash: hash,
-        size: stats.size,
-        type: path.extname(dest).slice(1) || 'unknown'
+function saveManifest(targetDir, manifest) {
+    if (DRY_RUN) {
+        log.dry(`write manifest -> ${path.join(targetDir, MANIFEST_FILE)}`);
+        return;
+    }
+    fs.writeFileSync(path.join(targetDir, MANIFEST_FILE), JSON.stringify(manifest, null, 2));
+}
+
+function newManifest(version) {
+    return {
+        version,
+        installedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        files: {},
+        directories: [],
+        binaryPath: null,
+        settingsModified: false,
+        hooksRegistered: [],
     };
 }
 
-function removeDir(dir) {
-    if (!fs.existsSync(dir)) return 0;
-    let removed = 0;
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
-    
-    for (const entry of entries) {
-        const fullPath = path.join(dir, entry.name);
-        if (entry.isDirectory()) {
-            removed += removeDir(fullPath);
-            fs.rmdirSync(fullPath);
-        } else {
-            fs.unlinkSync(fullPath);
-            removed++;
-        }
-    }
-    return removed;
-}
-
 function getInstalledVersion(targetDir) {
-    const versionFile = path.join(targetDir, '.droidpartment-version');
-    if (fs.existsSync(versionFile)) {
-        return fs.readFileSync(versionFile, 'utf8').trim();
-    }
-    // Check if droids exist but no version file (legacy install)
-    const droidsDir = path.join(targetDir, 'droids');
-    if (fs.existsSync(droidsDir) && fs.existsSync(path.join(droidsDir, 'dpt-memory.md'))) {
-        return 'legacy';
-    }
+    const vp = path.join(targetDir, VERSION_FILE);
+    if (fs.existsSync(vp)) return fs.readFileSync(vp, 'utf8').trim();
+    if (fs.existsSync(path.join(targetDir, 'droids', 'dpt-memory.md'))) return 'legacy';
     return null;
 }
 
 function saveVersion(targetDir, version) {
-    const versionFile = path.join(targetDir, '.droidpartment-version');
-    fs.writeFileSync(versionFile, version);
+    if (DRY_RUN) { log.dry(`write version ${version}`); return; }
+    fs.writeFileSync(path.join(targetDir, VERSION_FILE), version);
 }
 
-function getFileSize(filePath) {
-    if (!fs.existsSync(filePath)) return 0;
-    return fs.statSync(filePath).size;
-}
-
-function formatSize(bytes) {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function countYamlEntries(filePath) {
-    if (!fs.existsSync(filePath)) return 0;
-    try {
-        const content = fs.readFileSync(filePath, 'utf8');
-        // Match "- id:" with optional leading whitespace
-        const matches = content.match(/^\s*- id:/gm);
-        return matches ? matches.length : 0;
-    } catch {
-        return 0;
-    }
-}
-
-function getProjectMemories(memoryDir) {
-    const projectsDir = path.join(memoryDir, 'projects');
-    if (!fs.existsSync(projectsDir)) return [];
-    
-    const projects = [];
-    const entries = fs.readdirSync(projectsDir, { withFileTypes: true });
-    
-    for (const entry of entries) {
-        if (entry.isDirectory()) {
-            const projectPath = path.join(projectsDir, entry.name);
-            const lessons = countYamlEntries(path.join(projectPath, 'lessons.yaml'));
-            const mistakes = countYamlEntries(path.join(projectPath, 'mistakes.yaml'));
-            const patterns = countYamlEntries(path.join(projectPath, 'patterns.yaml'));
-            const size = getFileSize(path.join(projectPath, 'lessons.yaml')) +
-                        getFileSize(path.join(projectPath, 'mistakes.yaml')) +
-                        getFileSize(path.join(projectPath, 'patterns.yaml')) +
-                        getFileSize(path.join(projectPath, 'sessions.json')) +
-                        getFileSize(path.join(projectPath, 'STRUCTURE.md'));
-            
-            // Count sessions
-            let sessions = 0;
-            const sessionsFile = path.join(projectPath, 'sessions.json');
-            if (fs.existsSync(sessionsFile)) {
-                try {
-                    const sessionsData = JSON.parse(fs.readFileSync(sessionsFile, 'utf8'));
-                    sessions = (sessionsData.sessions || []).length;
-                } catch {}
-            }
-            
-            if (lessons > 0 || mistakes > 0 || patterns > 0 || sessions > 0 || size > 0) {
-                projects.push({
-                    name: entry.name,
-                    lessons,
-                    mistakes,
-                    patterns,
-                    sessions,
-                    size
-                });
-            }
-        }
-    }
-    return projects;
-}
-
-async function manageMemory(targetDir) {
-    // Check if installed
-    if (!isInstalled(targetDir)) {
-        log.header('NOT INSTALLED');
-        log.warn('Droidpartment is not installed yet.');
-        log.info('Run: npx droidpartment');
-        return;
-    }
-    
-    const memoryDir = path.join(targetDir, 'memory');
-    
-    if (!fs.existsSync(memoryDir)) {
-        log.warn('No memory directory found. Memory system not initialized.');
-        return;
-    }
-    
-    log.header('MEMORY MANAGEMENT');
-    
-    // Get memory stats
-    const lessonsFile = path.join(memoryDir, 'lessons.yaml');
-    const patternsFile = path.join(memoryDir, 'patterns.yaml');
-    const mistakesFile = path.join(memoryDir, 'mistakes.yaml');
-    const lessonsCount = countYamlEntries(lessonsFile);
-    const patternsCount = countYamlEntries(patternsFile);
-    const mistakesCount = countYamlEntries(mistakesFile);
-    const lessonsSize = getFileSize(lessonsFile);
-    const patternsSize = getFileSize(patternsFile);
-    const mistakesSize = getFileSize(mistakesFile);
-    const projects = getProjectMemories(memoryDir);
-    
-    // Display current status
-    console.log(`${COLORS.bright}GLOBAL MEMORY:${COLORS.reset}`);
-    console.log(`  Lessons:  ${lessonsCount} entries (${formatSize(lessonsSize)})`);
-    console.log(`  Patterns: ${patternsCount} entries (${formatSize(patternsSize)})`);
-    console.log(`  Mistakes: ${mistakesCount} entries (${formatSize(mistakesSize)})`);
-    console.log('');
-    
-    console.log(`${COLORS.bright}PROJECT MEMORIES:${COLORS.reset}`);
-    if (projects.length === 0) {
-        console.log('  (none yet)');
-    } else {
-        for (const proj of projects) {
-            const stats = [];
-            if (proj.lessons > 0) stats.push(`${proj.lessons} lessons`);
-            if (proj.mistakes > 0) stats.push(`${proj.mistakes} mistakes`);
-            if (proj.patterns > 0) stats.push(`${proj.patterns} patterns`);
-            if (proj.sessions > 0) stats.push(`${proj.sessions} sessions`);
-            const statsStr = stats.length > 0 ? stats.join(', ') : 'empty';
-            console.log(`  ${COLORS.cyan}${proj.name}${COLORS.reset}: ${statsStr} (${formatSize(proj.size)})`);
-        }
-    }
-    console.log('');
-    
-    // Menu
-    console.log('What would you like to clean?');
-    console.log('');
-    console.log(`  ${COLORS.green}1${COLORS.reset}) Exit (keep all)`);
-    console.log(`  ${COLORS.yellow}2${COLORS.reset}) Clear global lessons`);
-    console.log(`  ${COLORS.yellow}3${COLORS.reset}) Clear global patterns`);
-    console.log(`  ${COLORS.yellow}4${COLORS.reset}) Clear global mistakes`);
-    console.log(`  ${COLORS.yellow}5${COLORS.reset}) Clear specific project memory`);
-    console.log(`  ${COLORS.red}6${COLORS.reset}) Clear ALL global memory`);
-    console.log(`  ${COLORS.red}7${COLORS.reset}) Clear ALL project memories`);
-    console.log(`  ${COLORS.red}8${COLORS.reset}) Clear EVERYTHING (start fresh)`);
-    console.log('');
-    
-    const choice = await prompt('Select option [1-8]', '1');
-    
-    switch (choice) {
-        case '1':
-            log.info('No changes made.');
-            break;
-            
-        case '2':
-            if (fs.existsSync(lessonsFile)) {
-                fs.writeFileSync(lessonsFile, `# GLOBAL LESSONS - Universal Knowledge\nlessons: []\n`);
-                log.success(`Cleared ${lessonsCount} lessons`);
-            }
-            break;
-            
-        case '3':
-            if (fs.existsSync(patternsFile)) {
-                fs.writeFileSync(patternsFile, `# GLOBAL PATTERNS - Universal Truths\npatterns: []\n`);
-                log.success(`Cleared ${patternsCount} patterns`);
-            }
-            break;
-            
-        case '4':
-            if (fs.existsSync(mistakesFile)) {
-                fs.writeFileSync(mistakesFile, `# GLOBAL MISTAKES - Prevention Database\nmistakes: []\n`);
-                log.success(`Cleared ${mistakesCount} mistakes`);
-            }
-            break;
-            
-        case '5':
-            if (projects.length === 0) {
-                log.warn('No project memories to clear.');
-            } else {
-                console.log('');
-                console.log('Which project memory to clear?');
-                console.log('');
-                projects.forEach((proj, i) => {
-                    console.log(`  ${COLORS.yellow}${i + 1}${COLORS.reset}) ${proj.name} (${proj.lessons} lessons, ${proj.mistakes} mistakes)`);
-                });
-                console.log(`  ${COLORS.green}0${COLORS.reset}) Cancel`);
-                console.log('');
-                
-                const projChoice = await prompt('Select project', '0');
-                const projIndex = parseInt(projChoice) - 1;
-                
-                if (projIndex >= 0 && projIndex < projects.length) {
-                    const projDir = path.join(memoryDir, 'projects', projects[projIndex].name);
-                    removeDir(projDir);
-                    fs.rmdirSync(projDir);
-                    log.success(`Cleared memory for: ${projects[projIndex].name}`);
-                } else {
-                    log.info('Cancelled.');
-                }
-            }
-            break;
-            
-        case '6':
-            if (fs.existsSync(lessonsFile)) {
-                fs.writeFileSync(lessonsFile, `# GLOBAL LESSONS - Universal Knowledge\nlessons: []\n`);
-            }
-            if (fs.existsSync(patternsFile)) {
-                fs.writeFileSync(patternsFile, `# GLOBAL PATTERNS - Universal Truths\npatterns: []\n`);
-            }
-            if (fs.existsSync(mistakesFile)) {
-                fs.writeFileSync(mistakesFile, `# GLOBAL MISTAKES - Prevention Database\nmistakes: []\n`);
-            }
-            log.success(`Cleared all global memory (${lessonsCount} lessons, ${patternsCount} patterns, ${mistakesCount} mistakes)`);
-            break;
-            
-        case '7':
-            if (projects.length === 0) {
-                log.warn('No project memories to clear.');
-            } else {
-                const projectsDir = path.join(memoryDir, 'projects');
-                for (const proj of projects) {
-                    const projDir = path.join(projectsDir, proj.name);
-                    removeDir(projDir);
-                    fs.rmdirSync(projDir);
-                }
-                log.success(`Cleared ${projects.length} project memories`);
-            }
-            break;
-            
-        case '8':
-            // Clear global
-            if (fs.existsSync(lessonsFile)) {
-                fs.writeFileSync(lessonsFile, `# GLOBAL LESSONS - Universal Knowledge\nlessons: []\n`);
-            }
-            if (fs.existsSync(patternsFile)) {
-                fs.writeFileSync(patternsFile, `# GLOBAL PATTERNS - Universal Truths\npatterns: []\n`);
-            }
-            if (fs.existsSync(mistakesFile)) {
-                fs.writeFileSync(mistakesFile, `# GLOBAL MISTAKES - Prevention Database\nmistakes: []\n`);
-            }
-            // Clear projects
-            if (projects.length > 0) {
-                const projectsDir = path.join(memoryDir, 'projects');
-                for (const proj of projects) {
-                    const projDir = path.join(projectsDir, proj.name);
-                    removeDir(projDir);
-                    fs.rmdirSync(projDir);
-                }
-            }
-            log.success('Cleared ALL memory - starting fresh like a newborn!');
-            break;
-            
-        default:
-            log.info('Invalid choice. No changes made.');
-    }
-}
-
-function compareVersions(v1, v2) {
-    if (v1 === 'legacy') return -1;
-    if (v2 === 'legacy') return 1;
-    
-    const parts1 = v1.split('.').map(Number);
-    const parts2 = v2.split('.').map(Number);
-    
-    for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
-        const p1 = parts1[i] || 0;
-        const p2 = parts2[i] || 0;
-        if (p1 > p2) return 1;
-        if (p1 < p2) return -1;
+function compareVersions(a, b) {
+    if (a === 'legacy') return -1;
+    if (b === 'legacy') return 1;
+    const pa = a.split('.').map(Number), pb = b.split('.').map(Number);
+    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+        const x = pa[i] || 0, y = pb[i] || 0;
+        if (x > y) return 1;
+        if (x < y) return -1;
     }
     return 0;
 }
 
-function isInstalled(targetDir) {
-    const versionFile = path.join(targetDir, '.droidpartment-version');
-    const chiefFile = path.join(targetDir, 'droids', 'dpt-chief.md');
-    return fs.existsSync(versionFile) || fs.existsSync(chiefFile);
-}
-
-async function uninstall(targetDir, autoYes = false, purgeMemory = false) {
-    // Check if installed
-    if (!isInstalled(targetDir)) {
-        log.header('NOTHING TO UNINSTALL');
-        log.info(`Droidpartment is not installed in ${targetDir}`);
-        log.success('Already clean!');
-        return;
-    }
-    
-    log.header('UNINSTALLING DROIDPARTMENT');
-    
-    let totalRemoved = 0;
-    
-    // Load manifest for clean uninstall
-    const manifest = loadManifest(targetDir);
-    
-    if (manifest && manifest.files) {
-        // === MANIFEST-BASED UNINSTALL (CLEAN) ===
-        log.info('Using manifest for clean uninstall...');
-        
-        // Files to PRESERVE (user's learning data) - never delete these
-        const preserveFiles = [
-            'memory/lessons.yaml',
-            'memory/mistakes.yaml', 
-            'memory/patterns.yaml',
-            'memory/stats.yaml'
-        ];
-        
-        // Remove all tracked files EXCEPT learning data
-        const files = Object.keys(manifest.files);
-        let preserved = 0;
-        for (const relPath of files) {
-            // Skip learning files - preserve user data
-            if (preserveFiles.some(p => relPath.endsWith(p.replace('memory/', '')))) {
-                log.verbose(`Preserved: ${relPath} (learning data)`);
-                preserved++;
-                continue;
-            }
-            
-            const fullPath = path.join(targetDir, relPath);
-            if (fs.existsSync(fullPath)) {
-                try {
-                    fs.unlinkSync(fullPath);
-                    log.verbose(`Removed: ${relPath}`);
-                    totalRemoved++;
-                } catch (e) {
-                    log.warn(`Could not remove: ${relPath}`);
-                }
-            }
-        }
-        log.success(`Removed ${totalRemoved} tracked files`);
-        if (preserved > 0) {
-            log.info(`Preserved ${preserved} learning files (lessons, mistakes, patterns)`);
-        }
-        
-        // Remove tracked directories (in reverse order - deepest first)
-        const dirs = [...(manifest.directories || [])].sort((a, b) => b.length - a.length);
-        let dirsRemoved = 0;
-        for (const relDir of dirs) {
-            const fullDir = path.join(targetDir, relDir);
-            if (fs.existsSync(fullDir)) {
-                try {
-                    const remaining = fs.readdirSync(fullDir);
-                    // Only remove if empty or only contains __pycache__
-                    if (remaining.length === 0 || 
-                        (remaining.length === 1 && remaining[0] === '__pycache__')) {
-                        if (remaining.includes('__pycache__')) {
-                            removeDir(path.join(fullDir, '__pycache__'));
-                            fs.rmdirSync(path.join(fullDir, '__pycache__'));
-                        }
-                        fs.rmdirSync(fullDir);
-                        dirsRemoved++;
-                    }
-                } catch (e) { /* ignore - not empty */ }
-            }
-        }
-        if (dirsRemoved > 0) {
-            log.success(`Removed ${dirsRemoved} directories`);
-        }
-    } else {
-        // No manifest found - cannot uninstall cleanly
-        log.error('No manifest found. Cannot determine installed files.');
-        log.error('Please reinstall Droidpartment first, then uninstall.');
-        return;
-    }
-    
-    // Remove hook registrations from Factory settings
-    const settingsPath = path.join(process.env.HOME || process.env.USERPROFILE, '.factory', 'settings.json');
-    try {
-        if (fs.existsSync(settingsPath)) {
-            let content = fs.readFileSync(settingsPath, 'utf8');
-            content = content.replace(/\/\/.*$/gm, '');
-            content = content.replace(/\/\*[\s\S]*?\*\//g, '');
-            const settings = JSON.parse(content);
-            
-            if (settings.hooks) {
-                delete settings.hooks.SessionStart;
-                delete settings.hooks.SubagentStop;
-                delete settings.hooks.PostToolUse;
-                delete settings.hooks.SessionEnd;
-                delete settings.hooks.PreToolUse;
-                delete settings.hooks.UserPromptSubmit;
-                
-                if (Object.keys(settings.hooks).length === 0) {
-                    delete settings.hooks;
-                }
-                
-                fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
-                log.success('Removed hook registrations from Factory settings');
-            }
-        }
-    } catch (e) {
-        log.warn('Could not remove hook registrations: ' + e.message);
-    }
-    
-    // Handle memory directory
+function detectV3PythonInstall(targetDir) {
     const memoryDir = path.join(targetDir, 'memory');
-    if (fs.existsSync(memoryDir)) {
-        // Count memory data (YAML files only - these are the learning data)
-        const lessonsFile = path.join(memoryDir, 'lessons.yaml');
-        const patternsFile = path.join(memoryDir, 'patterns.yaml');
-        const mistakesFile = path.join(memoryDir, 'mistakes.yaml');
-        const lessonsCount = countYamlEntries(lessonsFile);
-        const patternsCount = countYamlEntries(patternsFile);
-        const mistakesCount = countYamlEntries(mistakesFile);
-        const totalMemory = lessonsCount + patternsCount + mistakesCount;
-        
-        // Always remove: hooks/, *.py, *.json (these are code/state, not user data)
-        const hooksDir = path.join(memoryDir, 'hooks');
-        if (fs.existsSync(hooksDir)) {
-            const hooksRemoved = removeDir(hooksDir);
-            try { fs.rmdirSync(hooksDir); } catch (e) { /* ignore */ }
-            log.success(`Removed hooks (${hooksRemoved} files)`);
-            totalRemoved += hooksRemoved;
-        }
-        
-        // Remove ALL .py files (Python modules)
-        const pyFiles = fs.readdirSync(memoryDir).filter(f => f.endsWith('.py'));
-        for (const pyFile of pyFiles) {
-            fs.unlinkSync(path.join(memoryDir, pyFile));
-            totalRemoved++;
-        }
-        if (pyFiles.length > 0) {
-            log.success(`Removed ${pyFiles.length} Python modules`);
-        }
-        
-        // Remove ALL .json files (state files, not user data)
-        const jsonFiles = fs.readdirSync(memoryDir).filter(f => f.endsWith('.json'));
-        for (const jsonFile of jsonFiles) {
-            fs.unlinkSync(path.join(memoryDir, jsonFile));
-            totalRemoved++;
-        }
-        if (jsonFiles.length > 0) {
-            log.success(`Removed ${jsonFiles.length} state files`);
-        }
-        
-        // Remove __pycache__ if exists
-        const pycacheDir = path.join(memoryDir, '__pycache__');
-        if (fs.existsSync(pycacheDir)) {
-            removeDir(pycacheDir);
-            try { fs.rmdirSync(pycacheDir); } catch (e) { /* ignore */ }
-            log.success('Removed __pycache__');
-        }
-        
-        // Handle YAML memory files (user learning data)
-        if (totalMemory > 0) {
-            log.warn(`Memory found: ${lessonsCount} lessons, ${patternsCount} patterns, ${mistakesCount} mistakes`);
-            
-            let deleteMemory = purgeMemory;
-            
-            if (!autoYes && !purgeMemory) {
-                console.log('');
-                console.log(`${COLORS.cyan}Preserve Memory Data?${COLORS.reset}`);
-                console.log('');
-                console.log(`  ${COLORS.green}1${COLORS.reset}) Keep memory (default)`);
-                console.log('     Your learning is preserved for next reinstall');
-                console.log('');
-                console.log(`  ${COLORS.red}2${COLORS.reset}) Delete memory`);
-                console.log('     Clean slate on next install');
-                console.log('');
-                
-                const choice = await prompt('Select option [1/2]', '1');
-                deleteMemory = choice === '2';
+    if (!fs.existsSync(memoryDir)) return false;
+    if (fs.existsSync(path.join(memoryDir, 'hooks'))) return true;
+    const entries = fs.readdirSync(memoryDir).filter(f => f.endsWith('.py'));
+    return entries.length > 0;
+}
+
+function findPlatformBinary() {
+    const platform = process.platform; // win32 | darwin | linux
+    const arch = process.arch;          // x64 | arm64
+    const ext = platform === 'win32' ? '.exe' : '';
+    const pkgName = `@droidpartment/cli-${platform}-${arch}`;
+
+    // 1. Try resolved optional dependency
+    try {
+        const pkgPath = require.resolve(`${pkgName}/package.json`, { paths: [path.join(__dirname, '..')] });
+        const pkgDir = path.dirname(pkgPath);
+        const candidate = path.join(pkgDir, 'bin', `dpt${ext}`);
+        if (fs.existsSync(candidate)) return candidate;
+    } catch { /* not installed */ }
+
+    // 2. Try local source build (developer / monorepo install)
+    const localBuild = path.join(__dirname, '..', 'rust', 'target', 'release', `dpt${ext}`);
+    if (fs.existsSync(localBuild)) return localBuild;
+
+    return null;
+}
+
+function copyBinary(targetDir, manifest) {
+    const platform = process.platform;
+    const ext = platform === 'win32' ? '.exe' : '';
+    const binSrc = findPlatformBinary();
+    if (!binSrc) {
+        log.err(`No native dpt binary available for ${platform}-${process.arch}.`);
+        log.info('Make sure your npm install completed (the platform package is an optional dependency).');
+        log.info('Or build from source: cd rust && cargo build --release');
+        return null;
+    }
+
+    const binDir = path.join(targetDir, 'bin');
+    ensureDir(binDir);
+    const binDest = path.join(binDir, `dpt${ext}`);
+
+    if (DRY_RUN) {
+        log.dry(`copy ${binSrc} -> ${binDest}`);
+        return binDest;
+    }
+
+    // On Windows, replacing a running exe needs MoveFileEx-style semantics. Best-effort fallback.
+    try {
+        if (fs.existsSync(binDest)) {
+            try { fs.unlinkSync(binDest); }
+            catch (e) {
+                const stash = `${binDest}.old-${Date.now()}`;
+                fs.renameSync(binDest, stash);
+                log.verbose(`stashed running binary as ${path.basename(stash)}`);
             }
-            
-            if (deleteMemory) {
-                // Delete YAML memory files
-                if (fs.existsSync(lessonsFile)) fs.unlinkSync(lessonsFile);
-                if (fs.existsSync(patternsFile)) fs.unlinkSync(patternsFile);
-                if (fs.existsSync(mistakesFile)) fs.unlinkSync(mistakesFile);
-                const statsFile = path.join(memoryDir, 'stats.yaml');
-                if (fs.existsSync(statsFile)) fs.unlinkSync(statsFile);
-                
-                // Remove projects directory
-                const projectsDir = path.join(memoryDir, 'projects');
-                if (fs.existsSync(projectsDir)) {
-                    removeDir(projectsDir);
-                    try { fs.rmdirSync(projectsDir); } catch (e) { /* ignore */ }
-                }
-                
-                log.success(`Deleted memory (${lessonsCount} lessons, ${patternsCount} patterns, ${mistakesCount} mistakes)`);
-                totalRemoved += 4;
-                
-                // Try to remove memory directory if empty
-                try {
-                    const remaining = fs.readdirSync(memoryDir);
-                    if (remaining.length === 0) {
-                        fs.rmdirSync(memoryDir);
-                        log.success('Removed empty memory directory');
-                    }
-                } catch (e) { /* ignore */ }
+        }
+        fs.copyFileSync(binSrc, binDest);
+        if (platform !== 'win32') {
+            fs.chmodSync(binDest, 0o755);
+        }
+        log.verbose(`installed binary ${binDest}`);
+    } catch (e) {
+        log.err(`failed to install binary: ${e.message}`);
+        return null;
+    }
+
+    const rel = path.relative(targetDir, binDest);
+    manifest.files[rel] = {
+        size: fs.statSync(binDest).size,
+        type: 'binary',
+    };
+    manifest.binaryPath = rel;
+    if (!manifest.directories.includes('bin')) manifest.directories.push('bin');
+
+    return binDest;
+}
+
+function copyTreeTracked(srcRoot, destRoot, manifest, baseDir, opts = {}) {
+    const skipNames = new Set(opts.skipNames || []);
+    const preserveExisting = new Set(opts.preserveExisting || []);
+    let count = 0;
+
+    function walk(src, dest) {
+        if (skipNames.has(path.basename(src))) return;
+        ensureDir(dest);
+        const relDir = path.relative(baseDir, dest);
+        if (relDir && !manifest.directories.includes(relDir)) {
+            manifest.directories.push(relDir);
+        }
+        for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+            if (skipNames.has(entry.name)) continue;
+            const sp = path.join(src, entry.name);
+            const dp = path.join(dest, entry.name);
+            if (entry.isDirectory()) {
+                walk(sp, dp);
             } else {
-                // Preserve memory YAML files
-                log.success(`Preserved memory (${lessonsCount} lessons, ${patternsCount} patterns, ${mistakesCount} mistakes)`);
-                log.info('Memory will be available on next install');
+                if (DRY_RUN) {
+                    log.dry(`copy ${sp} -> ${dp}`);
+                    continue;
+                }
+                if (preserveExisting.has(entry.name) && fs.existsSync(dp)) {
+                    log.verbose(`preserved ${path.relative(baseDir, dp)}`);
+                } else {
+                    fs.copyFileSync(sp, dp);
+                    count++;
+                }
+                const rel = path.relative(baseDir, dp);
+                manifest.files[rel] = {
+                    size: fs.statSync(dp).size,
+                    type: path.extname(entry.name).slice(1) || 'file',
+                };
             }
+        }
+    }
+    if (fs.existsSync(srcRoot)) walk(srcRoot, destRoot);
+    return count;
+}
+
+function copyFileTracked(src, dest, manifest, baseDir) {
+    if (!fs.existsSync(src)) return false;
+    if (DRY_RUN) {
+        log.dry(`copy ${src} -> ${dest}`);
+        return true;
+    }
+    ensureDir(path.dirname(dest));
+    fs.copyFileSync(src, dest);
+    const rel = path.relative(baseDir, dest);
+    manifest.files[rel] = {
+        size: fs.statSync(dest).size,
+        type: path.extname(dest).slice(1) || 'file',
+    };
+    return true;
+}
+
+function removeDir(dir) {
+    if (!fs.existsSync(dir)) return 0;
+    let n = 0;
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const p = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+            n += removeDir(p);
+            try { fs.rmdirSync(p); } catch {}
         } else {
-            // No learning data - remove remaining files and directory
-            const statsFile = path.join(memoryDir, 'stats.yaml');
-            if (fs.existsSync(statsFile)) fs.unlinkSync(statsFile);
-            
-            // Remove projects directory if exists
-            const projectsDir = path.join(memoryDir, 'projects');
-            if (fs.existsSync(projectsDir)) {
-                removeDir(projectsDir);
-                try { fs.rmdirSync(projectsDir); } catch (e) { /* ignore */ }
-            }
-            
-            // Try to remove memory directory if empty
+            try { fs.unlinkSync(p); n++; } catch {}
+        }
+    }
+    return n;
+}
+
+function migrateFromV3Python(targetDir) {
+    const memoryDir = path.join(targetDir, 'memory');
+    if (!fs.existsSync(memoryDir)) return 0;
+
+    log.head('MIGRATING FROM v3 (Python -> Rust)');
+    let removed = 0;
+
+    // 1. Remove ~/.factory/memory/hooks/ entirely
+    const hooksDir = path.join(memoryDir, 'hooks');
+    if (fs.existsSync(hooksDir)) {
+        if (DRY_RUN) {
+            log.dry(`rm -rf ${hooksDir}`);
+        } else {
+            removed += removeDir(hooksDir);
+            try { fs.rmdirSync(hooksDir); } catch {}
+            log.ok(`removed memory/hooks/ (${removed} files)`);
+        }
+    }
+
+    // 2. Remove top-level Python modules in memory/
+    for (const f of fs.readdirSync(memoryDir)) {
+        if (f.endsWith('.py') || f.endsWith('.pyc') || f === '__pycache__') {
+            const fp = path.join(memoryDir, f);
+            if (DRY_RUN) { log.dry(`rm ${fp}`); continue; }
             try {
-                const remaining = fs.readdirSync(memoryDir);
-                if (remaining.length === 0) {
-                    fs.rmdirSync(memoryDir);
-                    log.success('Removed empty memory directory');
+                if (fs.statSync(fp).isDirectory()) {
+                    removeDir(fp);
+                    fs.rmdirSync(fp);
+                } else {
+                    fs.unlinkSync(fp);
                 }
-            } catch (e) { /* ignore */ }
+                removed++;
+            } catch {}
         }
     }
-    
-    // Remove AGENTS.md
-    const agentsMd = path.join(targetDir, 'AGENTS.md');
-    if (fs.existsSync(agentsMd)) {
-        fs.unlinkSync(agentsMd);
-        log.success('Removed AGENTS.md');
-        totalRemoved++;
+
+    // 3. Remove old droid_usage.json / tool_stats.json / session_history.json (schema may differ)
+    for (const f of ['session_history.json']) {
+        const fp = path.join(memoryDir, f);
+        if (fs.existsSync(fp)) {
+            if (DRY_RUN) { log.dry(`rm ${fp}`); continue; }
+            try { fs.unlinkSync(fp); removed++; } catch {}
+        }
     }
-    
-    // Remove manifest file
-    const manifestPath = path.join(targetDir, MANIFEST_FILE);
-    if (fs.existsSync(manifestPath)) {
-        fs.unlinkSync(manifestPath);
-        log.verbose('Removed manifest');
-        totalRemoved++;
-    }
-    
-    // Remove version file
-    const versionFile = path.join(targetDir, '.droidpartment-version');
-    if (fs.existsSync(versionFile)) {
-        fs.unlinkSync(versionFile);
-        totalRemoved++;
-    }
-    
-    log.header('UNINSTALL COMPLETE');
-    console.log(`Removed ${totalRemoved} items from ${targetDir}`);
-    console.log('');
-    log.info('Restart droid CLI to apply changes.');
+
+    // 4. Move Stat files to new location memory/stats/ (Rust stats.rs writes there)
+    const statsDir = path.join(memoryDir, 'stats');
+    ensureDir(statsDir);
+
+    log.ok(`migration complete (${removed} legacy files removed)`);
+    log.info('Preserved: lessons.yaml, patterns.yaml, mistakes.yaml, stats.yaml, projects/');
+    return removed;
 }
 
-function update(targetDir, installedVersion) {
-    log.header('UPDATING DROIDPARTMENT');
-    console.log(`${COLORS.yellow}Installed:${COLORS.reset} ${installedVersion}`);
-    console.log(`${COLORS.green}Available:${COLORS.reset} ${CURRENT_VERSION}`);
-    console.log('');
-    
-    // Load old manifest to detect stale files
-    const oldManifest = loadManifest(targetDir);
-    
-    // Create new manifest
-    const newManifest = createManifest(CURRENT_VERSION);
-    if (oldManifest) {
-        newManifest.installedAt = oldManifest.installedAt; // Preserve original install date
-    }
-    
-    // Update droids with manifest tracking
-    log.header('UPDATING AGENTS');
-    const droidsSource = path.join(TEMPLATES_DIR, 'droids');
-    const droidsTarget = path.join(targetDir, 'droids');
-    ensureDir(droidsTarget);
-    const droidsCopied = copyDirWithManifest(droidsSource, droidsTarget, newManifest, targetDir);
-    log.success(`Updated ${droidsCopied} agent(s)`);
-    
-    // Update skills with manifest tracking
-    const skillsSource = path.join(TEMPLATES_DIR, 'skills');
-    const skillsTarget = path.join(targetDir, 'skills');
-    if (fs.existsSync(skillsSource)) {
-        ensureDir(skillsTarget);
-        const skillsCopied = copyDirWithManifest(skillsSource, skillsTarget, newManifest, targetDir);
-        log.success(`Updated ${skillsCopied} skill file(s)`);
-    }
-    
-    // Update AGENTS.md with manifest tracking
-    const agentsMdSource = path.join(TEMPLATES_DIR, 'AGENTS.md');
-    if (fs.existsSync(agentsMdSource)) {
-        const agentsMdTarget = path.join(targetDir, 'AGENTS.md');
-        copyFileWithManifest(agentsMdSource, agentsMdTarget, newManifest, targetDir);
-        log.success('Updated AGENTS.md orchestrator');
-    }
-    
-    // Update hooks with manifest tracking
-    log.header('UPDATING HOOKS');
-    const hooksSource = path.join(TEMPLATES_DIR, 'hooks');
-    const memoryTarget = path.join(targetDir, 'memory');
-    const hooksTarget = path.join(memoryTarget, 'hooks');
-    newManifest.directories.push('memory');
-    newManifest.directories.push('memory/hooks');
-    
-    if (fs.existsSync(hooksSource)) {
-        ensureDir(hooksTarget);
-        const hooksCopied = copyDirWithManifest(hooksSource, hooksTarget, newManifest, targetDir);
-        log.success(`Updated ${hooksCopied} hooks`);
-        
-        // Re-register hooks in Factory settings
-        registerHooks(hooksTarget);
-    }
-    
-    // Update Python modules with manifest tracking
-    log.header('UPDATING PYTHON MODULES');
-    const memorySource = path.join(TEMPLATES_DIR, 'memory');
-    const pythonModules = ['context_index.py', 'workflow_state.py', 'shared_context.py'];
-    let modulesUpdated = 0;
-    for (const module of pythonModules) {
-        const srcPath = path.join(memorySource, module);
-        const destPath = path.join(memoryTarget, module);
-        if (fs.existsSync(srcPath)) {
-            copyFileWithManifest(srcPath, destPath, newManifest, targetDir);
-            modulesUpdated++;
-        }
-    }
-    if (modulesUpdated > 0) {
-        log.success(`Updated ${modulesUpdated} Python modules`);
-    }
-    
-    // === STALE FILE CLEANUP ===
-    // Remove files that were in old manifest but NOT in new manifest
-    if (oldManifest && oldManifest.files) {
-        const oldFiles = new Set(Object.keys(oldManifest.files));
-        const newFiles = new Set(Object.keys(newManifest.files));
-        
-        let staleRemoved = 0;
-        for (const oldFile of oldFiles) {
-            if (!newFiles.has(oldFile)) {
-                const fullPath = path.join(targetDir, oldFile);
-                if (fs.existsSync(fullPath)) {
-                    try {
-                        fs.unlinkSync(fullPath);
-                        log.verbose(`Removed stale: ${oldFile}`);
-                        staleRemoved++;
-                    } catch (e) { /* ignore */ }
-                }
-            }
-        }
-        if (staleRemoved > 0) {
-            log.success(`Removed ${staleRemoved} stale files from old version`);
-        }
-    }
-    
-    // NOTE: We don't update memory YAML files to preserve learned data!
-    log.info('Memory data preserved (lessons, patterns, mistakes kept)');
-    
-    // Save new manifest
-    newManifest.settingsModified = true;
-    newManifest.hooksRegistered = ['SessionStart', 'SubagentStop', 'PostToolUse', 'SessionEnd', 'PreToolUse', 'UserPromptSubmit'];
-    saveManifest(targetDir, newManifest);
-    log.success(`Manifest updated (${Object.keys(newManifest.files).length} files tracked)`);
-    
-    // Save new version
-    saveVersion(targetDir, CURRENT_VERSION);
-    
-    log.header('UPDATE COMPLETE');
-    console.log(`${COLORS.bright}Updated to:${COLORS.reset} v${CURRENT_VERSION}`);
-    console.log('');
-    log.info('Restart droid CLI to apply changes.');
+function isInstalled(targetDir) {
+    return fs.existsSync(path.join(targetDir, VERSION_FILE)) ||
+           fs.existsSync(path.join(targetDir, 'droids', 'dpt-memory.md'));
 }
 
-function registerHooks(hooksTarget) {
-    const settingsDir = path.join(process.env.HOME || process.env.USERPROFILE, '.factory');
-    const settingsPath = path.join(settingsDir, 'settings.json');
-    ensureDir(settingsDir);
+function dptBinaryAt(targetDir) {
+    const ext = process.platform === 'win32' ? '.exe' : '';
+    return path.join(targetDir, 'bin', `dpt${ext}`);
+}
 
-    let settings = {};
+function settingsPathFor(targetDir) {
+    // Project install -> project-local settings; personal install -> ~/.factory/settings.json.
+    if (targetDir === PROJECT_DIR) return path.join(targetDir, 'settings.json');
+    return path.join(process.env.HOME || process.env.USERPROFILE || os.homedir(), '.factory', 'settings.json');
+}
+
+function backupSettings(settingsPath) {
+    if (!fs.existsSync(settingsPath)) return null;
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const dest = `${settingsPath}.bak-${stamp}`;
+    fs.copyFileSync(settingsPath, dest);
+    if (process.platform !== 'win32') {
+        try { fs.chmodSync(dest, 0o600); } catch {}
+    }
+    pruneBackups(settingsPath);
+    return dest;
+}
+
+function pruneBackups(settingsPath) {
+    const dir = path.dirname(settingsPath);
+    const baseName = path.basename(settingsPath);
+    let entries;
+    try { entries = fs.readdirSync(dir); } catch { return; }
+    const baks = entries
+        .filter(f => f.startsWith(baseName + '.bak-'))
+        .map(f => ({ name: f, full: path.join(dir, f), mtime: 0 }));
+    for (const b of baks) {
+        try { b.mtime = fs.statSync(b.full).mtimeMs; } catch {}
+    }
+    baks.sort((a, b) => b.mtime - a.mtime);
+    for (const old of baks.slice(BACKUP_RETAIN)) {
+        try { fs.unlinkSync(old.full); } catch {}
+    }
+}
+
+function readSettingsStrict(settingsPath) {
+    // Returns { settings, raw, parseError }. Never silently defaults to {}.
+    if (!fs.existsSync(settingsPath)) return { settings: {}, raw: null, parseError: null };
+    let raw = fs.readFileSync(settingsPath, 'utf8');
+    if (raw.charCodeAt(0) === 0xFEFF) raw = raw.slice(1);
     try {
-        if (fs.existsSync(settingsPath)) {
-            let content = fs.readFileSync(settingsPath, 'utf8');
-            content = content.replace(/\/\/.*$/gm, '');
-            content = content.replace(/\/\*[\s\S]*?\*\//g, '');
-            settings = JSON.parse(content);
-        }
+        return { settings: JSON.parse(raw), raw, parseError: null };
     } catch (e) {
-        settings = {};
+        return { settings: null, raw, parseError: e };
+    }
+}
+
+function readEffectiveSettings(settingsPath) {
+    // Read settings.json + settings.local.json overlay (per Droid docs).
+    const base = readSettingsStrict(settingsPath);
+    if (base.parseError || !base.settings) return base;
+    const localPath = settingsPath.replace(/settings\.json$/, 'settings.local.json');
+    if (!fs.existsSync(localPath)) return base;
+    const local = readSettingsStrict(localPath);
+    if (local.parseError || !local.settings) {
+        log.warn(`settings.local.json could not be parsed; ignoring overlay: ${local.parseError && local.parseError.message}`);
+        return base;
+    }
+    return { settings: { ...base.settings, ...local.settings }, raw: base.raw, parseError: null };
+}
+
+function isOurHookEntry(entry) {
+    // "Our" entries point at dpt(.exe) hook <event> or the legacy python hook-*.py.
+    if (!entry || !Array.isArray(entry.hooks)) return false;
+    return entry.hooks.every(h => {
+        const cmd = String(h && h.command || '');
+        // Allow any non-word characters (quotes, slashes, spaces) between dpt[.exe] and `hook`.
+        return /\bdpt(\.exe)?\b[^\w]+hook\b/i.test(cmd) || /hook-[a-z-]+\.py\b/i.test(cmd);
+    });
+}
+
+function registerHooks(targetDir, dptBinary, manifest) {
+    const settingsPath = settingsPathFor(targetDir);
+    ensureDir(path.dirname(settingsPath));
+
+    const { settings, raw, parseError } = readSettingsStrict(settingsPath);
+    if (parseError) {
+        log.err(`Refusing to modify ${settingsPath}: existing JSON is not parseable.`);
+        log.err(`  Reason: ${parseError.message}`);
+        log.info(`  Fix the file by hand, or use \`dpt install-hooks\` and merge the printed block yourself.`);
+        log.info(`  The original file has not been touched.`);
+        return false;
     }
 
-    if (!settings.hooks) {
-        settings.hooks = {};
+    // Honor settings.local.json overlay for the hooksDisabled flag (per Droid settings docs).
+    const effective = readEffectiveSettings(settingsPath).settings || settings || {};
+    if (effective.hooksDisabled === true) {
+        log.warn(`hooksDisabled is true (effective via settings.json or settings.local.json); skipping hook registration.`);
+        log.info('  Set hooksDisabled to false (or remove it) and re-run install to enable Droidpartment hooks.');
+        manifest.settingsModified = false;
+        manifest.hooksRegistered = [];
+        return true;
     }
 
-    const hooksPathForward = hooksTarget.replace(/\\/g, '/');
-    const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
+    const next = settings || {};
+    if (!next.hooks || typeof next.hooks !== 'object') next.hooks = {};
 
-    settings.hooks.SessionStart = [{
-        "matcher": "*",
-        "hooks": [{"type": "command", "command": `${pythonCmd} ${hooksPathForward}/hook-session-start.py`, "timeout": 30}]
-    }];
-    settings.hooks.SubagentStop = [{
-        "matcher": "*",
-        "hooks": [{"type": "command", "command": `${pythonCmd} ${hooksPathForward}/hook-subagent-stop.py`, "timeout": 15}]
-    }];
-    settings.hooks.PostToolUse = [{
-        "matcher": "*",
-        "hooks": [{"type": "command", "command": `${pythonCmd} ${hooksPathForward}/hook-post-tool-use.py`, "timeout": 10}]
-    }];
-    settings.hooks.SessionEnd = [{
-        "matcher": "*",
-        "hooks": [{"type": "command", "command": `${pythonCmd} ${hooksPathForward}/hook-session-end.py`, "timeout": 30}]
-    }];
-    settings.hooks.PreToolUse = [{
-        "matcher": "*",
-        "hooks": [{"type": "command", "command": `${pythonCmd} ${hooksPathForward}/hook-pre-tool-use.py`, "timeout": 10}]
-    }];
-    settings.hooks.UserPromptSubmit = [{
-        "matcher": "*",
-        "hooks": [{"type": "command", "command": `${pythonCmd} ${hooksPathForward}/hook-user-prompt-submit.py`, "timeout": 15}]
-    }];
+    const bin = dptBinary.replace(/\\/g, '/');
+    // Only quote the path when it actually contains spaces. Some shells (notably
+    // cmd.exe via Droid's hook runner) re-escape outer quotes which can turn
+    // `"path"` into the literal `\"path\"` and break execution.
+    const quoted = bin.includes(' ') ? `"${bin}"` : bin;
+    const cmd = arg => `${quoted} hook ${arg}`;
 
-    try {
+    const events = [
+        ['SessionStart', '*', 'session-start', 15],
+        ['UserPromptSubmit', '*', 'user-prompt-submit', 5],
+        ['PreToolUse', '*', 'pre-tool-use', 5],
+        ['PostToolUse', '*', 'post-tool-use', 5],
+        ['Stop', '*', 'stop', 5],
+        ['SubagentStop', '*', 'subagent-stop', 5],
+        ['SessionEnd', '*', 'session-end', 10],
+        ['PreCompact', '*', 'pre-compact', 5],
+        ['Notification', '', 'notification', 5],
+    ];
+
+    const ourEntry = (matcher, sub, timeout) => ({
+        matcher,
+        hooks: [{ type: 'command', command: cmd(sub), timeout }],
+    });
+
+    let added = 0, replaced = 0, kept = 0;
+    for (const [event, matcher, sub, timeout] of events) {
+        const handlers = Array.isArray(next.hooks[event]) ? next.hooks[event].slice() : [];
+        // Drop any existing Droidpartment-owned entries; keep everything else verbatim.
+        const others = handlers.filter(h => !isOurHookEntry(h));
+        const ourCount = handlers.length - others.length;
+        kept += others.length;
+        others.push(ourEntry(matcher, sub, timeout));
+        if (ourCount > 0) replaced++;
+        else added++;
+        next.hooks[event] = others;
+    }
+
+    if (DRY_RUN) {
+        log.dry(`would write ${settingsPath} (added ${added}, replaced ${replaced}, kept ${kept} unrelated)`);
+        return true;
+    }
+
+    if (raw !== null) {
+        const bakPath = backupSettings(settingsPath);
+        if (bakPath) log.verbose(`backup: ${bakPath}`);
+    }
+
+    fs.writeFileSync(settingsPath, JSON.stringify(next, null, 2));
+    log.ok(`updated ${settingsPath} (added ${added}, replaced ${replaced}, kept ${kept} unrelated entries)`);
+
+    manifest.settingsModified = true;
+    manifest.settingsPath = settingsPath;
+    manifest.hooksRegistered = events.map(e => e[0]);
+    return true;
+}
+
+function unregisterHooks(targetDir) {
+    const settingsPath = settingsPathFor(targetDir);
+    if (!fs.existsSync(settingsPath)) return;
+    const { settings, parseError } = readSettingsStrict(settingsPath);
+    if (parseError) {
+        log.warn(`could not parse ${settingsPath}: ${parseError.message}`);
+        log.info('skipping hook removal; please remove dpt hook entries manually');
+        return;
+    }
+    if (!settings.hooks) return;
+
+    const bakPath = backupSettings(settingsPath);
+    if (bakPath) log.verbose(`backup: ${bakPath}`);
+
+    let changed = false;
+    for (const event of ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Stop', 'SubagentStop', 'SessionEnd', 'PreCompact', 'Notification']) {
+        const handlers = settings.hooks[event];
+        if (!Array.isArray(handlers)) continue;
+        const filtered = handlers.filter(h => !isOurHookEntry(h));
+        if (filtered.length === handlers.length) continue;
+        changed = true;
+        if (filtered.length === 0) delete settings.hooks[event];
+        else settings.hooks[event] = filtered;
+    }
+    if (changed) {
+        if (Object.keys(settings.hooks).length === 0) delete settings.hooks;
         fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
-        log.success('Hooks registered in Factory settings');
-    } catch (e) {
-        log.warn('Could not register hooks: ' + e.message);
+        log.ok(`removed Droidpartment hooks from ${settingsPath}`);
     }
-}
-
-async function prompt(question, defaultValue = '') {
-    const rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout
-    });
-
-    return new Promise((resolve) => {
-        const defaultText = defaultValue ? ` (${defaultValue})` : '';
-        rl.question(`${question}${defaultText}: `, (answer) => {
-            rl.close();
-            resolve(answer || defaultValue);
-        });
-    });
-}
-
-function showBanner() {
-    console.log(`
-${COLORS.bright}${COLORS.cyan}
-  ____  ____   ___  ___ ____  ____   _    ____ _____ __  __ _____ _   _ _____ 
- |  _ \\|  _ \\ / _ \\|_ _|  _ \\|  _ \\ / \\  |  _ \\_   _|  \\/  | ____| \\ | |_   _|
- | | | | |_) | | | || || | | | |_) / _ \\ | |_) || | | |\\/| |  _| |  \\| | | |  
- | |_| |  _ <| |_| || || |_| |  __/ ___ \\|  _ < | | | |  | | |___| |\\  | | |  
- |____/|_| \\_\\\\___/|___|____/|_| /_/   \\_\\_| \\_\\|_| |_|  |_|_____|_| \_| |_|  
-                                                                              
-${COLORS.reset}
-           ${COLORS.bright}Autonomous Software Development Department${COLORS.reset}
-                      ${COLORS.cyan}18 Expert Agents (dpt-*)${COLORS.reset}
-                              ${COLORS.yellow}v${CURRENT_VERSION}${COLORS.reset}
-`);
 }
 
 function install(targetDir) {
-    // Create manifest to track all installed files
-    const manifest = createManifest(CURRENT_VERSION);
-    
-    // Create directories
-    const droidsTarget = path.join(targetDir, 'droids');
-    const skillsTarget = path.join(targetDir, 'skills');
-    
-    ensureDir(droidsTarget);
-    ensureDir(skillsTarget);
-    
-    // Copy droids with manifest tracking
-    log.header('INSTALLING AGENTS');
-    const droidsSource = path.join(TEMPLATES_DIR, 'droids');
-    const droidsCopied = copyDirWithManifest(droidsSource, droidsTarget, manifest, targetDir);
-    log.success(`Installed ${droidsCopied} agent(s)`);
-    
-    // Copy skills with manifest tracking
-    const skillsSource = path.join(TEMPLATES_DIR, 'skills');
-    if (fs.existsSync(skillsSource)) {
-        const skillsCopied = copyDirWithManifest(skillsSource, skillsTarget, manifest, targetDir);
-        log.success(`Installed ${skillsCopied} skill file(s)`);
-    }
-    
-    // Copy memory system with manifest tracking
-    log.header('INSTALLING MEMORY SYSTEM');
-    const memoryTarget = path.join(targetDir, 'memory');
-    const memorySource = path.join(TEMPLATES_DIR, 'memory');
-    ensureDir(memoryTarget);
-    ensureDir(path.join(memoryTarget, 'projects')); // For per-project memories
-    manifest.directories.push('memory');
-    manifest.directories.push('memory/projects');
-    
-    if (fs.existsSync(memorySource)) {
-        const memoryCopied = copyDirWithManifest(memorySource, memoryTarget, manifest, targetDir);
-        log.success(`Installed global memory (${memoryCopied} files)`);
-        log.info('Global: lessons.yaml, patterns.yaml, mistakes.yaml (shared across all projects)');
-        log.info('Per-project: memory/projects/{project}/ (auto-created when needed)');
-    }
-    
-    // Copy hooks with manifest tracking
-    log.header('INSTALLING FACTORY HOOKS');
-    const hooksSource = path.join(TEMPLATES_DIR, 'hooks');
-    const hooksTarget = path.join(memoryTarget, 'hooks');
-    if (fs.existsSync(hooksSource)) {
-        ensureDir(hooksTarget);
-        const hooksCopied = copyDirWithManifest(hooksSource, hooksTarget, manifest, targetDir);
-        log.success(`Installed ${hooksCopied} Factory hooks`);
-        log.info('Hooks enable automatic:');
-        log.info('  ✓ Memory initialization (SessionStart)');
-        log.info('  ✓ Context transfer between agents (SubagentStop)');
-        log.info('  ✓ Progress tracking (PostToolUse)');
-        log.info('  ✓ Session cleanup (SessionEnd)');
-        log.info('  ✓ Tool validation (PreToolUse)');
-        log.info('  ✓ Prompt enrichment (UserPromptSubmit)');
-    }
-    
-    // Register hooks in Factory settings (handles JSONC format)
-    const settingsDir = path.join(process.env.HOME || process.env.USERPROFILE, '.factory');
-    const settingsPath = path.join(settingsDir, 'settings.json');
-    ensureDir(settingsDir);
+    log.head('INSTALLING DROIDPARTMENT v' + CURRENT_VERSION);
+    ensureDir(targetDir);
+    const previousManifest = loadManifest(targetDir);
+    const manifest = newManifest(CURRENT_VERSION);
 
-    let settings = {};
-    try {
-        if (fs.existsSync(settingsPath)) {
-            // Read and strip JSONC comments (// and /* */)
-            let content = fs.readFileSync(settingsPath, 'utf8');
-            content = content.replace(/\/\/.*$/gm, ''); // Remove // comments
-            content = content.replace(/\/\*[\s\S]*?\*\//g, ''); // Remove /* */ comments
-            settings = JSON.parse(content);
+    if (detectV3PythonInstall(targetDir)) {
+        migrateFromV3Python(targetDir);
+    }
+
+    log.head('INSTALLING NATIVE BINARY');
+    const dptBin = copyBinary(targetDir, manifest);
+    if (!dptBin) {
+        log.err('cannot continue without dpt binary');
+        return false;
+    }
+    log.ok(`dpt available at ${dptBin}`);
+
+    log.head('INSTALLING SUB-DROIDS');
+    const droidsDest = path.join(targetDir, 'droids');
+    const c1 = copyTreeTracked(path.join(TEMPLATES_DIR, 'droids'), droidsDest, manifest, targetDir);
+    log.ok(`installed ${c1} sub-droid file(s)`);
+
+    log.head('INSTALLING SKILLS');
+    const skillsDest = path.join(targetDir, 'skills');
+    const c2 = copyTreeTracked(path.join(TEMPLATES_DIR, 'skills'), skillsDest, manifest, targetDir);
+    log.ok(`installed ${c2} skill file(s)`);
+
+    log.head('INSTALLING MEMORY DEFAULTS');
+    const memoryDest = path.join(targetDir, 'memory');
+    ensureDir(memoryDest);
+    ensureDir(path.join(memoryDest, 'projects'));
+    if (!manifest.directories.includes('memory')) manifest.directories.push('memory');
+    if (!manifest.directories.includes('memory/projects')) manifest.directories.push('memory/projects');
+    const memorySrc = path.join(TEMPLATES_DIR, 'memory');
+    if (fs.existsSync(memorySrc)) {
+        const preserve = ['lessons.yaml', 'patterns.yaml', 'mistakes.yaml', 'stats.yaml'];
+        const c3 = copyTreeTracked(memorySrc, memoryDest, manifest, targetDir, { preserveExisting: preserve });
+        log.ok(`installed ${c3} memory template file(s)`);
+    }
+
+    const agentsSrc = path.join(TEMPLATES_DIR, 'AGENTS.md');
+    if (fs.existsSync(agentsSrc)) {
+        copyFileTracked(agentsSrc, path.join(targetDir, 'AGENTS.md'), manifest, targetDir);
+        log.ok('installed AGENTS.md');
+    }
+
+    // Note: templates/plugin/ is the source for the future plugin-marketplace
+    // distribution. The npm-install path does not copy it because that would
+    // duplicate hook registrations.
+
+    log.head('REGISTERING HOOKS');
+    const ok = registerHooks(targetDir, dptBin, manifest);
+    if (!ok) {
+        log.warn('hooks were not registered - install otherwise complete');
+    }
+
+    // Delta-patch cleanup: remove files that were tracked in the previous
+    // manifest but are not in the new one (e.g. retired slash commands).
+    if (previousManifest && previousManifest.files) {
+        const preserveBases = new Set(['lessons.yaml', 'patterns.yaml', 'mistakes.yaml', 'stats.yaml']);
+        const newFiles = new Set(Object.keys(manifest.files));
+        let removed = 0;
+        for (const rel of Object.keys(previousManifest.files)) {
+            if (newFiles.has(rel)) continue;
+            const base = path.basename(rel);
+            if (preserveBases.has(base)) continue;
+            const fp = path.join(targetDir, rel);
+            if (!fs.existsSync(fp)) continue;
+            if (DRY_RUN) { log.dry(`rm stale ${rel}`); continue; }
+            try { fs.unlinkSync(fp); removed++; log.verbose(`removed stale ${rel}`); } catch {}
         }
-    } catch (e) {
-        log.warn('Could not parse settings.json, creating fresh hooks config');
-        settings = {};
+        if (removed > 0) log.ok(`cleaned ${removed} retired file(s)`);
     }
 
-    if (!settings.hooks) {
-        settings.hooks = {};
+    // Hard-coded sweep of directories the v4 templates no longer contain. Catches
+    // stale files left over from older installs whose manifest entries were
+    // overwritten without tracking the removal (e.g. slash commands removed
+    // between v4.0.x point releases).
+    const retiredDirs = ['commands'];
+    for (const rel of retiredDirs) {
+        const dp = path.join(targetDir, rel);
+        const tplDir = path.join(TEMPLATES_DIR, rel);
+        if (fs.existsSync(dp) && !fs.existsSync(tplDir)) {
+            if (DRY_RUN) { log.dry(`rm -rf ${dp}`); }
+            else {
+                try {
+                    removeDir(dp);
+                    fs.rmdirSync(dp);
+                    log.ok(`cleaned retired ${rel}/ directory`);
+                } catch {}
+            }
+        }
     }
 
-    // Use forward slashes for cross-platform compatibility
-    const hooksPathForward = hooksTarget.replace(/\\/g, '/');
-    
-    // Detect Python command (python on Windows, python3 on Unix)
-    const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
-
-    // Register 6 hooks with proper paths and timeouts (per Factory AI specification)
-    settings.hooks.SessionStart = [{
-        "matcher": "*",
-        "hooks": [{"type": "command", "command": `${pythonCmd} ${hooksPathForward}/hook-session-start.py`, "timeout": 30}]
-    }];
-    settings.hooks.SubagentStop = [{
-        "matcher": "*",
-        "hooks": [{"type": "command", "command": `${pythonCmd} ${hooksPathForward}/hook-subagent-stop.py`, "timeout": 15}]
-    }];
-    settings.hooks.PostToolUse = [{
-        "matcher": "*",
-        "hooks": [{"type": "command", "command": `${pythonCmd} ${hooksPathForward}/hook-post-tool-use.py`, "timeout": 10}]
-    }];
-    settings.hooks.SessionEnd = [{
-        "matcher": "*",
-        "hooks": [{"type": "command", "command": `${pythonCmd} ${hooksPathForward}/hook-session-end.py`, "timeout": 30}]
-    }];
-    settings.hooks.PreToolUse = [{
-        "matcher": "*",
-        "hooks": [{"type": "command", "command": `${pythonCmd} ${hooksPathForward}/hook-pre-tool-use.py`, "timeout": 10}]
-    }];
-    settings.hooks.UserPromptSubmit = [{
-        "matcher": "*",
-        "hooks": [{"type": "command", "command": `${pythonCmd} ${hooksPathForward}/hook-user-prompt-submit.py`, "timeout": 15}]
-    }];
-
-    try {
-        fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
-        log.success('Hooks registered in Factory settings');
-        log.info(`  Using: ${pythonCmd} with forward-slash paths`);
-    } catch (e) {
-        log.warn('Could not register hooks: ' + e.message);
+    // Best-effort: prune now-empty directories tracked in the old manifest.
+    if (previousManifest && previousManifest.directories) {
+        const oldDirs = previousManifest.directories;
+        for (const rel of [...oldDirs].sort((a, b) => b.length - a.length)) {
+            const dp = path.join(targetDir, rel);
+            if (!fs.existsSync(dp)) continue;
+            try {
+                if (fs.readdirSync(dp).length === 0) fs.rmdirSync(dp);
+            } catch {}
+        }
     }
-    
-    // Copy AGENTS.md with manifest tracking
-    const agentsMdSource = path.join(TEMPLATES_DIR, 'AGENTS.md');
-    if (fs.existsSync(agentsMdSource)) {
-        const agentsMdTarget = path.join(targetDir, 'AGENTS.md');
-        copyFileWithManifest(agentsMdSource, agentsMdTarget, manifest, targetDir);
-        log.success('Installed AGENTS.md orchestrator');
-    }
-    
-    // Mark settings as modified and track hooks
-    manifest.settingsModified = true;
-    manifest.hooksRegistered = ['SessionStart', 'SubagentStop', 'PostToolUse', 'SessionEnd', 'PreToolUse', 'UserPromptSubmit'];
-    
-    // Save manifest (THIS IS THE KEY - tracks everything we installed)
+
     saveManifest(targetDir, manifest);
-    log.success(`Manifest saved (${Object.keys(manifest.files).length} files tracked)`);
-    
-    // Save version (legacy compatibility)
     saveVersion(targetDir, CURRENT_VERSION);
 
-    // Summary
-    log.header('INSTALLATION COMPLETE');
-    
-    console.log(`${COLORS.bright}Installed:${COLORS.reset} v${CURRENT_VERSION}`);
-    console.log(`${COLORS.bright}Location:${COLORS.reset} ${targetDir}`);
+    log.head('INSTALL COMPLETE');
+    console.log(`Installed v${CURRENT_VERSION} to ${targetDir}`);
+    console.log('Restart your Droid CLI to apply hook changes.');
     console.log('');
-    
-    log.header('NEXT STEPS');
-    console.log('1. Enable Custom Droids in Factory:');
-    console.log('   /settings → Experimental → Custom Droids');
-    console.log('');
-    console.log('2. Restart droid CLI');
-    console.log('');
-    console.log('3. Just describe your task - agents work automatically!');
-    console.log('');
-    console.log(`${COLORS.bright}Commands:${COLORS.reset}`);
-    console.log('   npx droidpartment              # Check for updates');
-    console.log('   npx droidpartment --memory     # Manage/clean memory');
-    console.log('   npx droidpartment --uninstall  # Remove');
-    console.log('');
-    
-    log.success('Droidpartment is ready!');
+    console.log('Try it:');
+    console.log('  npx droidpartment status');
+    console.log('  npx droidpartment doctor');
+    console.log(`  ${dptBin} stats`);
+    console.log(`  ${dptBin} run -- echo hello`);
+    return true;
 }
 
-function showAgentList() {
-    console.log(`${COLORS.bright}18 Expert Agents (called via Task tool):${COLORS.reset}`);
-    console.log('');
-    console.log('  Memory & Output (SEQUENTIAL - must wait):');
-    console.log('  • dpt-memory     - Learning system (START/END of tasks)');
-    console.log('  • dpt-output     - Format results with memory stats');
-    console.log('');
-    console.log('  Planning (SEQUENTIAL):');
-    console.log('  • dpt-product    - Requirements, user stories');
-    console.log('  • dpt-research   - Best practices from official docs');
-    console.log('  • dpt-arch       - Architecture, ADRs, patterns');
-    console.log('  • dpt-scrum      - Task breakdown, dependencies');
-    console.log('');
-    console.log('  Implementation:');
-    console.log('  • dpt-dev        - Code implementation');
-    console.log('  • dpt-data       - Database, queries, indexes');
-    console.log('  • dpt-api        - API design, REST');
-    console.log('  • dpt-ux         - UI/UX, accessibility');
-    console.log('  • dpt-ops        - DevOps, CI/CD');
-    console.log('');
-    console.log('  Quality (CAN BE PARALLEL):');
-    console.log('  • dpt-sec        - Security (OWASP, CWE)');
-    console.log('  • dpt-lead       - Code review (SOLID)');
-    console.log('  • dpt-qa         - Testing (pyramid)');
-    console.log('  • dpt-review     - Simplicity check');
-    console.log('  • dpt-perf       - Performance (measure first!)');
-    console.log('');
-    console.log('  Support:');
-    console.log('  • dpt-docs       - Documentation');
-    console.log('  • dpt-grammar    - Grammar, clarity');
-    console.log('');
-    console.log('  Memory System:');
-    console.log('  • GLOBAL: lessons, patterns, mistakes (all projects)');
-    console.log('  • PER-PROJECT: knowledge per project');
-    console.log('  • Learning curve tracked over time');
-    console.log('');
+function uninstall(targetDir, purgeMemory) {
+    if (!isInstalled(targetDir)) {
+        log.head('NOTHING TO UNINSTALL');
+        log.info(`Droidpartment is not installed in ${targetDir}`);
+        return true;
+    }
+    log.head('UNINSTALLING DROIDPARTMENT');
+    const manifest = loadManifest(targetDir);
+
+    if (manifest && manifest.files) {
+        const preserve = new Set(['lessons.yaml', 'patterns.yaml', 'mistakes.yaml', 'stats.yaml']);
+        let removed = 0, preserved = 0;
+        for (const rel of Object.keys(manifest.files)) {
+            const base = path.basename(rel);
+            if (preserve.has(base) && !purgeMemory) {
+                preserved++;
+                log.verbose(`preserved ${rel}`);
+                continue;
+            }
+            const fp = path.join(targetDir, rel);
+            if (fs.existsSync(fp)) {
+                if (DRY_RUN) { log.dry(`rm ${fp}`); continue; }
+                try { fs.unlinkSync(fp); removed++; } catch {}
+            }
+        }
+        log.ok(`removed ${removed} tracked file(s); preserved ${preserved} learning file(s)`);
+
+        const dirs = [...(manifest.directories || [])].sort((a, b) => b.length - a.length);
+        for (const rel of dirs) {
+            const dp = path.join(targetDir, rel);
+            if (!fs.existsSync(dp)) continue;
+            try {
+                if (fs.readdirSync(dp).length === 0) fs.rmdirSync(dp);
+            } catch {}
+        }
+    } else {
+        log.warn('no manifest found; performing best-effort cleanup');
+        // best-effort: remove known dirs
+        for (const sub of ['droids', 'skills', 'bin', 'plugins']) {
+            const dp = path.join(targetDir, sub);
+            if (fs.existsSync(dp)) {
+                if (DRY_RUN) { log.dry(`rm -rf ${dp}`); continue; }
+                removeDir(dp);
+                try { fs.rmdirSync(dp); } catch {}
+            }
+        }
+    }
+
+    if (purgeMemory) {
+        const memoryDir = path.join(targetDir, 'memory');
+        if (fs.existsSync(memoryDir)) {
+            if (DRY_RUN) {
+                log.dry(`rm -rf ${memoryDir}`);
+            } else {
+                removeDir(memoryDir);
+                try { fs.rmdirSync(memoryDir); } catch {}
+                log.ok('purged memory/');
+            }
+        }
+        const rawDir = path.join(targetDir, 'raw-output');
+        if (fs.existsSync(rawDir)) {
+            if (!DRY_RUN) {
+                removeDir(rawDir);
+                try { fs.rmdirSync(rawDir); } catch {}
+                log.ok('purged raw-output/');
+            }
+        }
+    }
+
+    unregisterHooks(targetDir);
+
+    for (const f of [VERSION_FILE, MANIFEST_FILE, 'AGENTS.md']) {
+        const fp = path.join(targetDir, f);
+        if (fs.existsSync(fp)) {
+            if (DRY_RUN) log.dry(`rm ${fp}`);
+            else { try { fs.unlinkSync(fp); } catch {} }
+        }
+    }
+
+    log.head('UNINSTALL COMPLETE');
+    return true;
+}
+
+function dirSizeBytes(dir) {
+    if (!fs.existsSync(dir)) return 0;
+    let total = 0;
+    const stack = [dir];
+    while (stack.length) {
+        const cur = stack.pop();
+        for (const e of fs.readdirSync(cur, { withFileTypes: true })) {
+            const p = path.join(cur, e.name);
+            if (e.isDirectory()) stack.push(p);
+            else { try { total += fs.statSync(p).size; } catch {} }
+        }
+    }
+    return total;
+}
+
+function fmtBytes(n) {
+    if (n < 1024) return `${n} B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+    if (n < 1024 * 1024 * 1024) return `${(n / 1024 / 1024).toFixed(1)} MB`;
+    return `${(n / 1024 / 1024 / 1024).toFixed(2)} GB`;
+}
+
+function showStatus() {
+    log.head('DROIDPARTMENT STATUS');
+    const personal = getInstalledVersion(PERSONAL_DIR);
+    const project = getInstalledVersion(PROJECT_DIR);
+
+    console.log(`Personal (~/.factory): ${personal ? `v${personal}` : 'not installed'}`);
+    console.log(`Project  (./.factory):  ${project ? `v${project}` : 'not installed'}`);
+    console.log(`Available:              v${CURRENT_VERSION}`);
+
+    const targetDir = personal ? PERSONAL_DIR : (project ? PROJECT_DIR : null);
+    if (targetDir) {
+        const dptBin = dptBinaryAt(targetDir);
+        const hasBin = fs.existsSync(dptBin);
+        console.log(`dpt binary:             ${hasBin ? dptBin : 'MISSING'}`);
+        if (hasBin) {
+            const r = spawnSync(dptBin, ['--version'], { encoding: 'utf8' });
+            if (r.status === 0) console.log(`dpt --version:          ${r.stdout.trim()}`);
+        }
+        const droidsDir = path.join(targetDir, 'droids');
+        if (fs.existsSync(droidsDir)) {
+            const n = fs.readdirSync(droidsDir).filter(f => f.endsWith('.md')).length;
+            console.log(`sub-droids:             ${n}`);
+        }
+        const skillsDir = path.join(targetDir, 'skills');
+        if (fs.existsSync(skillsDir)) {
+            const n = fs.readdirSync(skillsDir, { withFileTypes: true }).filter(d => d.isDirectory()).length;
+            console.log(`skills:                 ${n}`);
+        }
+        const cmdsDir = path.join(targetDir, 'commands');
+        if (fs.existsSync(cmdsDir)) {
+            const n = fs.readdirSync(cmdsDir).filter(f => f.endsWith('.md')).length;
+            console.log(`slash commands:         ${n}`);
+        }
+        const settingsPath = settingsPathFor(targetDir);
+        const { settings, parseError } = readSettingsStrict(settingsPath);
+        if (parseError) {
+            console.log('hooks registered:       (settings.json could not be parsed)');
+        } else {
+            const hooks = settings && settings.hooks ? Object.keys(settings.hooks).length : 0;
+            console.log(`hooks registered:       ${hooks}`);
+            if (settings && settings.hooksDisabled) {
+                console.log(`                        (hooksDisabled is true - hooks will not run)`);
+            }
+        }
+        const settingsDir = path.dirname(settingsPath);
+        if (fs.existsSync(settingsDir)) {
+            const baks = fs.readdirSync(settingsDir).filter(f => f.startsWith('settings.json.') && f.includes('bak'));
+            if (baks.length > 0) console.log(`settings.json backups:  ${baks.length}`);
+        }
+        const rawDir = path.join(targetDir, 'raw-output');
+        if (fs.existsSync(rawDir)) {
+            const size = dirSizeBytes(rawDir);
+            const days = fs.readdirSync(rawDir, { withFileTypes: true }).filter(d => d.isDirectory()).length;
+            console.log(`raw-output:             ${days} day(s) on disk, ${fmtBytes(size)}`);
+        }
+    }
+}
+
+function doctor() {
+    log.head('DOCTOR');
+    let issues = 0;
+
+    const personal = getInstalledVersion(PERSONAL_DIR);
+    if (!personal) {
+        log.warn('not installed in ~/.factory');
+        issues++;
+    } else {
+        log.ok(`installed v${personal}`);
+    }
+
+    const targetDir = personal ? PERSONAL_DIR : null;
+    if (targetDir) {
+        const dpt = dptBinaryAt(targetDir);
+        if (!fs.existsSync(dpt)) {
+            log.err(`dpt binary missing at ${dpt}`);
+            issues++;
+        } else {
+            const r = spawnSync(dpt, ['--version'], { encoding: 'utf8' });
+            if (r.status !== 0) { log.err('dpt binary not executable'); issues++; }
+            else log.ok(`dpt OK: ${r.stdout.trim()}`);
+        }
+
+        if (detectV3PythonInstall(targetDir)) {
+            log.warn('legacy Python files still present - run `npx droidpartment update`');
+            issues++;
+        } else {
+            log.ok('no legacy Python files');
+        }
+    }
+
+    const settingsPath = settingsPathFor(targetDir || PERSONAL_DIR);
+    if (fs.existsSync(settingsPath)) {
+        const { settings, parseError } = readSettingsStrict(settingsPath);
+        if (parseError) {
+            log.err(`settings.json is not valid JSON: ${parseError.message}`);
+            issues++;
+        } else if (!settings.hooks || !settings.hooks.SessionStart) {
+            log.warn('SessionStart hook missing in settings.json');
+            issues++;
+        } else {
+            log.ok(`hooks registered (${Object.keys(settings.hooks).length} events)`);
+        }
+    } else {
+        log.warn(`no settings.json at ${settingsPath}`);
+        issues++;
+    }
+
+    if (issues === 0) log.ok('all checks passed');
+    else log.warn(`${issues} issue(s) found`);
+    return issues === 0 ? EXIT_OK : EXIT_ERROR;
+}
+
+function showBanner() {
+    if (VERBOSITY < 1) return;
+    console.log(`\n${COLORS.bright}${COLORS.cyan}Droidpartment${COLORS.reset} v${CURRENT_VERSION}`);
+    console.log(`${COLORS.dim}Token-saving multi-agent orchestration for Factory Droid CLI${COLORS.reset}\n`);
 }
 
 function showHelp() {
     console.log(`
-${COLORS.bright}Droidpartment${COLORS.reset} v${CURRENT_VERSION} - 18 Expert AI Agents for Factory AI
+Droidpartment v${CURRENT_VERSION}
 
-${COLORS.bright}USAGE:${COLORS.reset}
+USAGE:
   npx droidpartment [command] [options]
 
-${COLORS.bright}COMMANDS:${COLORS.reset}
-  ${COLORS.green}(none)${COLORS.reset}          Interactive install/update (default)
-  ${COLORS.green}install${COLORS.reset}         Install Droidpartment
-  ${COLORS.green}update${COLORS.reset}          Update to latest version
-  ${COLORS.green}reinstall${COLORS.reset}       Fresh install (uninstall + install)
-  ${COLORS.yellow}status${COLORS.reset}          Check installation status
-  ${COLORS.yellow}stats${COLORS.reset}           Show usage & learning statistics
-  ${COLORS.yellow}memory${COLORS.reset}          Manage/clean memory files
-  ${COLORS.red}uninstall${COLORS.reset}       Remove Droidpartment
+COMMANDS:
+  install      Install Droidpartment to ~/.factory
+  update       Update an existing install (migrates v3 Python -> v4 Rust)
+  reinstall    Uninstall then install (preserves learning YAMLs unless --purge)
+  uninstall    Remove Droidpartment (preserves learning YAMLs unless --purge)
+  status       Show install version, binary path, hook wiring, savings
+  doctor       Run diagnostics
 
-${COLORS.bright}OPTIONS:${COLORS.reset}
-  ${COLORS.cyan}-y, --yes${COLORS.reset}       Auto-confirm all prompts
-  ${COLORS.cyan}-q, --quiet${COLORS.reset}     Minimal output (errors only)
-  ${COLORS.cyan}-v, --verbose${COLORS.reset}   Detailed output
-  ${COLORS.cyan}--project${COLORS.reset}       Install to ./.factory (project-level)
-  ${COLORS.cyan}--force${COLORS.reset}         Force operation even if unnecessary
-  ${COLORS.cyan}--dry-run${COLORS.reset}       Preview changes without applying
-  ${COLORS.cyan}--purge${COLORS.reset}         Delete memory during uninstall
-  ${COLORS.cyan}--version${COLORS.reset}       Show version number
-  ${COLORS.cyan}--help${COLORS.reset}          Show this help message
+OPTIONS:
+  -q, --quiet      minimal output
+  -v, --verbose    detailed output
+  --project        install to ./.factory instead of ~/.factory
+  --force          force overwrite even if same version
+  --dry-run        preview without writing
+  --purge          delete YAML memory on uninstall
+  --version        print version
+  --help           print help
 
-${COLORS.bright}EXAMPLES:${COLORS.reset}
-  npx droidpartment                    # Interactive install
-  npx droidpartment install -y         # Auto-install
-  npx droidpartment update             # Update to latest
-  npx droidpartment status             # Check status
-  npx droidpartment stats              # View usage statistics
-  npx droidpartment reinstall --force  # Force fresh install
-  npx droidpartment uninstall --purge  # Remove + delete memory
-  npx droidpartment memory             # Manage memory
-  npx droidpartment install --dry-run  # Preview install
-
-${COLORS.bright}MORE INFO:${COLORS.reset}
-  https://github.com/UntaDotMy/Droidpartment
+EXAMPLES:
+  npx droidpartment install
+  npx droidpartment update
+  npx droidpartment status
+  npx droidpartment uninstall --purge
 `);
 }
 
-function checkInstallation() {
-    log.header('INSTALLATION CHECK');
-    
-    const personalInstalled = getInstalledVersion(PERSONAL_DIR);
-    const projectInstalled = getInstalledVersion(PROJECT_DIR);
-    
-    console.log(`${COLORS.bright}Personal (~/.factory):${COLORS.reset}`);
-    if (personalInstalled) {
-        log.success(`Installed v${personalInstalled}`);
-        
-        // Check components
-        const droidsDir = path.join(PERSONAL_DIR, 'droids');
-        const memoryDir = path.join(PERSONAL_DIR, 'memory');
-        const hooksDir = path.join(memoryDir, 'hooks');
-        const agentsMd = path.join(PERSONAL_DIR, 'AGENTS.md');
-        
-        const droidsCount = fs.existsSync(droidsDir) ? fs.readdirSync(droidsDir).filter(f => f.endsWith('.md')).length : 0;
-        const hooksCount = fs.existsSync(hooksDir) ? fs.readdirSync(hooksDir).filter(f => f.endsWith('.py')).length : 0;
-        const hasAgentsMd = fs.existsSync(agentsMd);
-        const hasMemory = fs.existsSync(memoryDir);
-        
-        console.log(`  Agents: ${droidsCount}/18`);
-        console.log(`  Hooks: ${hooksCount}/4`);
-        console.log(`  AGENTS.md: ${hasAgentsMd ? 'yes' : 'missing'}`);
-        console.log(`  Memory: ${hasMemory ? 'yes' : 'not initialized'}`);
-        
-        // Check memory stats
-        if (hasMemory) {
-            const lessonsCount = countYamlEntries(path.join(memoryDir, 'lessons.yaml'));
-            const patternsCount = countYamlEntries(path.join(memoryDir, 'patterns.yaml'));
-            const mistakesCount = countYamlEntries(path.join(memoryDir, 'mistakes.yaml'));
-            console.log(`  Learning: ${lessonsCount} lessons, ${patternsCount} patterns, ${mistakesCount} mistakes`);
-            
-            // Check droid usage stats
-            const droidUsageFile = path.join(memoryDir, 'droid_usage.json');
-            if (fs.existsSync(droidUsageFile)) {
-                try {
-                    const droidStats = JSON.parse(fs.readFileSync(droidUsageFile, 'utf8'));
-                    const totalCalls = droidStats.total_calls || 0;
-                    const topDroids = Object.entries(droidStats.droids || {})
-                        .sort((a, b) => b[1] - a[1])
-                        .slice(0, 3)
-                        .map(([name, count]) => `${name}(${count})`)
-                        .join(', ');
-                    console.log(`  Droid Calls: ${totalCalls} total${topDroids ? ` (top: ${topDroids})` : ''}`);
-                } catch {}
-            }
-            
-            // Check tool usage stats
-            const toolStatsFile = path.join(memoryDir, 'tool_stats.json');
-            if (fs.existsSync(toolStatsFile)) {
-                try {
-                    const toolStats = JSON.parse(fs.readFileSync(toolStatsFile, 'utf8'));
-                    const totalExec = toolStats.total_executions || 0;
-                    const errors = toolStats.errors || 0;
-                    console.log(`  Tool Calls: ${totalExec} total, ${errors} errors`);
-                } catch {}
-            }
-            
-            // Check session stats
-            const sessionHistoryFile = path.join(memoryDir, 'session_history.json');
-            if (fs.existsSync(sessionHistoryFile)) {
-                try {
-                    const history = JSON.parse(fs.readFileSync(sessionHistoryFile, 'utf8'));
-                    const sessionCount = (history.sessions || []).length;
-                    console.log(`  Sessions: ${sessionCount} recorded`);
-                } catch {}
-            }
-            
-            // Check project count
-            const projects = getProjectMemories(memoryDir);
-            if (projects.length > 0) {
-                const totalProjectLessons = projects.reduce((sum, p) => sum + p.lessons, 0);
-                const totalProjectSessions = projects.reduce((sum, p) => sum + p.sessions, 0);
-                console.log(`  Projects: ${projects.length} indexed (${totalProjectLessons} lessons, ${totalProjectSessions} sessions)`);
-            }
-        }
-        
-        // Check if update available
-        if (compareVersions(CURRENT_VERSION, personalInstalled) > 0) {
-            log.warn(`Update available: v${CURRENT_VERSION}`);
-        }
-    } else {
-        log.info('Not installed');
-    }
-    
-    console.log('');
-    console.log(`${COLORS.bright}Project (./.factory):${COLORS.reset}`);
-    if (projectInstalled) {
-        log.success(`Installed v${projectInstalled}`);
-    } else {
-        log.info('Not installed');
-    }
-    
-    console.log('');
-    console.log(`${COLORS.bright}Available Version:${COLORS.reset} v${CURRENT_VERSION}`);
-    
-    // Check Factory settings
-    const settingsPath = path.join(PERSONAL_DIR, 'settings.json');
-    if (fs.existsSync(settingsPath)) {
-        try {
-            let content = fs.readFileSync(settingsPath, 'utf8');
-            content = content.replace(/\/\/.*$/gm, '');
-            content = content.replace(/\/\*[\s\S]*?\*\//g, '');
-            const settings = JSON.parse(content);
-            const hooksRegistered = settings.hooks && settings.hooks.SessionStart ? 'yes' : 'no';
-            console.log(`${COLORS.bright}Hooks Registered:${COLORS.reset} ${hooksRegistered}`);
-        } catch {
-            console.log(`${COLORS.bright}Hooks Registered:${COLORS.reset} unknown`);
-        }
-    }
-}
-
-function showStats(targetDir) {
-    const memoryDir = path.join(targetDir, 'memory');
-    
-    if (!fs.existsSync(memoryDir)) {
-        log.warn('No memory directory found. Run some sessions first to generate statistics.');
-        return;
-    }
-    
-    log.header('📊 DROIDPARTMENT STATISTICS');
-    console.log('');
-    
-    // ═══════════════════════════════════════════════════════════════
-    // DROID USAGE
-    // ═══════════════════════════════════════════════════════════════
-    console.log(`${COLORS.bright}🤖 DROID USAGE:${COLORS.reset}`);
-    const droidUsageFile = path.join(memoryDir, 'droid_usage.json');
-    if (fs.existsSync(droidUsageFile)) {
-        try {
-            const droidStats = JSON.parse(fs.readFileSync(droidUsageFile, 'utf8'));
-            const totalCalls = droidStats.total_calls || 0;
-            const droids = droidStats.droids || {};
-            
-            console.log(`  Total agent calls: ${COLORS.cyan}${totalCalls}${COLORS.reset}`);
-            console.log('');
-            
-            // Sort droids by usage
-            const sortedDroids = Object.entries(droids).sort((a, b) => b[1] - a[1]);
-            
-            if (sortedDroids.length > 0) {
-                console.log('  Agent breakdown:');
-                for (const [name, count] of sortedDroids) {
-                    const bar = '█'.repeat(Math.min(20, Math.round(count / totalCalls * 40)));
-                    const pct = ((count / totalCalls) * 100).toFixed(1);
-                    console.log(`    ${COLORS.cyan}${name.padEnd(15)}${COLORS.reset} ${bar} ${count} (${pct}%)`);
-                }
-            }
-            console.log('');
-            
-            // Custom vs built-in droids
-            const builtInDroids = ['dpt-memory', 'dpt-dev', 'dpt-qa', 'dpt-sec', 'dpt-review', 'dpt-output', 
-                                   'dpt-lead', 'dpt-arch', 'dpt-product', 'dpt-scrum', 'dpt-research',
-                                   'dpt-api', 'dpt-data', 'dpt-docs', 'dpt-ux', 'dpt-ops', 'dpt-perf', 'dpt-grammar'];
-            let builtInCount = 0;
-            let customCount = 0;
-            for (const [name, count] of sortedDroids) {
-                if (builtInDroids.includes(name)) {
-                    builtInCount += count;
-                } else {
-                    customCount += count;
-                }
-            }
-            console.log(`  Built-in agents: ${builtInCount} calls`);
-            console.log(`  Custom agents:   ${customCount} calls`);
-        } catch {
-            console.log('  (no data yet)');
-        }
-    } else {
-        console.log('  (no data yet)');
-    }
-    console.log('');
-    
-    // ═══════════════════════════════════════════════════════════════
-    // TOOL USAGE
-    // ═══════════════════════════════════════════════════════════════
-    console.log(`${COLORS.bright}🔧 TOOL USAGE:${COLORS.reset}`);
-    const toolStatsFile = path.join(memoryDir, 'tool_stats.json');
-    if (fs.existsSync(toolStatsFile)) {
-        try {
-            const toolStats = JSON.parse(fs.readFileSync(toolStatsFile, 'utf8'));
-            const totalExec = toolStats.total_executions || 0;
-            const errors = toolStats.errors || 0;
-            const tools = toolStats.tools || {};
-            
-            console.log(`  Total tool calls: ${COLORS.cyan}${totalExec}${COLORS.reset}`);
-            console.log(`  Errors: ${errors > 0 ? COLORS.red : COLORS.green}${errors}${COLORS.reset}`);
-            console.log('');
-            
-            // Sort tools by usage
-            const sortedTools = Object.entries(tools)
-                .map(([name, data]) => [name, typeof data === 'number' ? data : data.count || 0])
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 10);
-            
-            if (sortedTools.length > 0) {
-                console.log('  Top tools:');
-                for (const [name, count] of sortedTools) {
-                    console.log(`    ${name.padEnd(15)} ${count} calls`);
-                }
-            }
-        } catch {
-            console.log('  (no data yet)');
-        }
-    } else {
-        console.log('  (no data yet)');
-    }
-    console.log('');
-    
-    // ═══════════════════════════════════════════════════════════════
-    // SESSION HISTORY
-    // ═══════════════════════════════════════════════════════════════
-    console.log(`${COLORS.bright}📅 SESSION HISTORY:${COLORS.reset}`);
-    const sessionHistoryFile = path.join(memoryDir, 'session_history.json');
-    if (fs.existsSync(sessionHistoryFile)) {
-        try {
-            const history = JSON.parse(fs.readFileSync(sessionHistoryFile, 'utf8'));
-            const sessions = history.sessions || [];
-            
-            console.log(`  Total sessions: ${COLORS.cyan}${sessions.length}${COLORS.reset}`);
-            
-            if (sessions.length > 0) {
-                // Recent sessions
-                const recent = sessions.slice(-5).reverse();
-                console.log('');
-                console.log('  Recent sessions:');
-                for (const s of recent) {
-                    const date = s.started_at ? new Date(s.started_at).toLocaleDateString() : 'unknown';
-                    const agents = s.agents_run || 0;
-                    const tools = s.tools_used || 0;
-                    console.log(`    ${date}: ${agents} agents, ${tools} tools`);
-                }
-            }
-        } catch {
-            console.log('  (no data yet)');
-        }
-    } else {
-        console.log('  (no data yet)');
-    }
-    console.log('');
-    
-    // ═══════════════════════════════════════════════════════════════
-    // LEARNING STATS
-    // ═══════════════════════════════════════════════════════════════
-    console.log(`${COLORS.bright}🧠 LEARNING PROGRESS:${COLORS.reset}`);
-    
-    // Global learning
-    const lessonsCount = countYamlEntries(path.join(memoryDir, 'lessons.yaml'));
-    const patternsCount = countYamlEntries(path.join(memoryDir, 'patterns.yaml'));
-    const mistakesCount = countYamlEntries(path.join(memoryDir, 'mistakes.yaml'));
-    
-    console.log(`  Global knowledge:`);
-    console.log(`    Lessons learned:  ${COLORS.green}${lessonsCount}${COLORS.reset}`);
-    console.log(`    Patterns found:   ${COLORS.cyan}${patternsCount}${COLORS.reset}`);
-    console.log(`    Mistakes tracked: ${COLORS.yellow}${mistakesCount}${COLORS.reset}`);
-    console.log('');
-    
-    // Project-specific learning
-    const projects = getProjectMemories(memoryDir);
-    if (projects.length > 0) {
-        console.log(`  Project knowledge (${projects.length} projects):`);
-        
-        let totalProjectLessons = 0;
-        let totalProjectMistakes = 0;
-        let totalProjectPatterns = 0;
-        let totalProjectSessions = 0;
-        
-        for (const proj of projects) {
-            totalProjectLessons += proj.lessons || 0;
-            totalProjectMistakes += proj.mistakes || 0;
-            totalProjectPatterns += proj.patterns || 0;
-            totalProjectSessions += proj.sessions || 0;
-        }
-        
-        console.log(`    Total lessons:  ${COLORS.green}${totalProjectLessons}${COLORS.reset} across projects`);
-        console.log(`    Total mistakes: ${COLORS.yellow}${totalProjectMistakes}${COLORS.reset} tracked`);
-        console.log(`    Total patterns: ${COLORS.cyan}${totalProjectPatterns}${COLORS.reset} identified`);
-        console.log(`    Total sessions: ${COLORS.cyan}${totalProjectSessions}${COLORS.reset} recorded`);
-        console.log('');
-        
-        // Per-project breakdown
-        console.log('  Per-project breakdown:');
-        for (const proj of projects.slice(0, 10)) {
-            const stats = [];
-            if (proj.lessons > 0) stats.push(`${proj.lessons}L`);
-            if (proj.mistakes > 0) stats.push(`${proj.mistakes}M`);
-            if (proj.patterns > 0) stats.push(`${proj.patterns}P`);
-            if (proj.sessions > 0) stats.push(`${proj.sessions}S`);
-            const statsStr = stats.length > 0 ? stats.join('/') : 'new';
-            console.log(`    ${COLORS.cyan}${proj.name.substring(0, 30).padEnd(30)}${COLORS.reset} ${statsStr}`);
-        }
-        if (projects.length > 10) {
-            console.log(`    ... and ${projects.length - 10} more projects`);
-        }
-    }
-    console.log('');
-    
-    // ═══════════════════════════════════════════════════════════════
-    // BRAIN EFFICIENCY
-    // ═══════════════════════════════════════════════════════════════
-    console.log(`${COLORS.bright}⚡ BRAIN EFFICIENCY:${COLORS.reset}`);
-    
-    // Calculate efficiency metrics
-    const droidUsage = fs.existsSync(droidUsageFile) ? JSON.parse(fs.readFileSync(droidUsageFile, 'utf8')) : {};
-    const totalAgentCalls = droidUsage.total_calls || 0;
-    
-    // Memory agent usage (shows learning discipline)
-    const memoryAgentCalls = (droidUsage.droids || {})['dpt-memory'] || 0;
-    const memoryRatio = totalAgentCalls > 0 ? ((memoryAgentCalls / totalAgentCalls) * 100).toFixed(1) : 0;
-    
-    // Learning rate - use global sessions if project sessions are 0
-    const totalLearning = lessonsCount + patternsCount;
-    let sessionCount = projects.reduce((sum, p) => sum + p.sessions, 0);
-    
-    // Fallback to global session history if project sessions are 0
-    if (sessionCount === 0) {
-        const sessionHistoryFile = path.join(memoryDir, 'session_history.json');
-        if (fs.existsSync(sessionHistoryFile)) {
-            try {
-                const history = JSON.parse(fs.readFileSync(sessionHistoryFile, 'utf8'));
-                sessionCount = (history.sessions || []).length;
-            } catch {}
-        }
-    }
-    
-    // If still 0, estimate from droid calls (assume ~3 agent calls per session)
-    if (sessionCount === 0 && totalAgentCalls > 0) {
-        sessionCount = Math.ceil(totalAgentCalls / 3);
-    }
-    
-    const learningRate = sessionCount > 0 ? (totalLearning / sessionCount).toFixed(2) : 'N/A';
-    
-    // Mistake prevention potential
-    const preventionPotential = mistakesCount * 5; // Each mistake could prevent 5 future issues
-    
-    console.log(`  Memory agent usage: ${memoryRatio}% of calls (higher = better learning discipline)`);
-    console.log(`  Learning rate: ${learningRate} lessons/session`);
-    console.log(`  Mistake prevention: ~${preventionPotential} potential issues avoided`);
-    console.log('');
-    
-    log.success('Statistics generated from ~/.factory/memory/');
-}
-
-// Parse arguments into command and flags
-function parseArgs(args) {
-    const result = {
-        command: null,
-        flags: {
-            yes: false,
-            quiet: false,
-            verbose: false,
-            project: false,
-            force: false,
-            dryRun: false,
-            purge: false,
-            version: false,
-            help: false
-        }
+function parseArgs(argv) {
+    const flags = {
+        quiet: false, verbose: false, project: false,
+        force: false, dryRun: false, purge: false, version: false, help: false,
     };
-    
-    const commands = ['install', 'update', 'uninstall', 'reinstall', 'status', 'memory', 'stats'];
-    
-    for (const arg of args) {
-        if (commands.includes(arg)) {
-            result.command = arg;
-        } else if (arg === '-y' || arg === '--yes') {
-            result.flags.yes = true;
-        } else if (arg === '-q' || arg === '--quiet') {
-            result.flags.quiet = true;
-        } else if (arg === '-v' || arg === '--verbose') {
-            result.flags.verbose = true;
-        } else if (arg === '--project') {
-            result.flags.project = true;
-        } else if (arg === '--force') {
-            result.flags.force = true;
-        } else if (arg === '--dry-run') {
-            result.flags.dryRun = true;
-        } else if (arg === '--purge' || arg === '--purge-memory') {
-            result.flags.purge = true;
-        } else if (arg === '--version') {
-            result.flags.version = true;
-        } else if (arg === '-h' || arg === '--help') {
-            result.flags.help = true;
-        } else if (arg === '-u') {
-            result.command = 'uninstall'; // Legacy support
-        } else if (arg === '-m') {
-            result.command = 'memory'; // Legacy support
-        } else if (arg === '--check') {
-            result.command = 'status'; // Legacy support
-        } else if (arg === '--stats') {
-            result.command = 'stats'; // Show statistics
-        } else if (arg === '--update') {
-            result.flags.force = true; // Legacy: --update means force update
-        } else if (arg.startsWith('-')) {
-            log.warn(`Unknown option: ${arg}`);
-        }
+    let command = null;
+    const cmds = new Set(['install', 'update', 'uninstall', 'reinstall', 'status', 'doctor']);
+    for (const a of argv) {
+        if (cmds.has(a)) command = a;
+        else if (a === '-q' || a === '--quiet') flags.quiet = true;
+        else if (a === '-v' || a === '--verbose') flags.verbose = true;
+        else if (a === '--project') flags.project = true;
+        else if (a === '--force') flags.force = true;
+        else if (a === '--dry-run') flags.dryRun = true;
+        else if (a === '--purge') flags.purge = true;
+        else if (a === '--version') flags.version = true;
+        else if (a === '--help' || a === '-h') flags.help = true;
+        else if (a === '-y' || a === '--yes') { /* legacy no-op: install is always non-interactive */ }
+        else if (a.startsWith('-')) log.warn(`unknown option: ${a}`);
     }
-    
-    return result;
+    return { command, flags };
 }
 
-async function main() {
-    const args = process.argv.slice(2);
-    const { command, flags } = parseArgs(args);
-    
-    // Set global flags
+function main() {
+    const { command, flags } = parseArgs(process.argv.slice(2));
     if (flags.quiet) VERBOSITY = 0;
     if (flags.verbose) VERBOSITY = 2;
     DRY_RUN = flags.dryRun;
-    
-    // Handle --version (always works, even in quiet mode)
+
     if (flags.version) {
         console.log(`droidpartment v${CURRENT_VERSION}`);
-        process.exit(EXIT_SUCCESS);
-        return;
+        process.exit(EXIT_OK);
     }
-    
-    // Handle --help
-    if (flags.help) {
-        showHelp();
-        process.exit(EXIT_SUCCESS);
-        return;
-    }
-    
-    if (DRY_RUN) {
-        log.warn('DRY-RUN MODE: No changes will be made');
-    }
-    
+    if (flags.help) { showHelp(); process.exit(EXIT_OK); }
+
     showBanner();
-    
-    // Route to appropriate command
-    const autoYes = flags.yes;
-    const forceProject = flags.project;
-    const forceUpdate = flags.force;
-    const purgeMemory = flags.purge;
-    
-    // Handle status command
-    if (command === 'status') {
-        checkInstallation();
-        process.exit(EXIT_SUCCESS);
-        return;
-    }
-    
-    // Handle stats command
-    if (command === 'stats') {
-        showStats(PERSONAL_DIR);
-        process.exit(EXIT_SUCCESS);
-        return;
-    }
-    
-    // Handle memory command
-    if (command === 'memory') {
-        const personalInstalled = isInstalled(PERSONAL_DIR);
-        const projectInstalled = isInstalled(PROJECT_DIR);
-        
-        if (!personalInstalled && !projectInstalled) {
-            log.header('NOT INSTALLED');
-            log.warn('Droidpartment is not installed yet.');
-            log.info('Run: npx droidpartment install');
-            process.exit(EXIT_NOT_INSTALLED);
-            return;
-        }
-        
-        const targetDir = forceProject ? PROJECT_DIR : (personalInstalled ? PERSONAL_DIR : PROJECT_DIR);
-        await manageMemory(targetDir);
-        process.exit(EXIT_SUCCESS);
-        return;
-    }
-    
-    // Handle reinstall command (uninstall + install)
-    if (command === 'reinstall') {
-        const personalInstalled = isInstalled(PERSONAL_DIR);
-        const projectInstalled = isInstalled(PROJECT_DIR);
-        const targetDir = forceProject ? PROJECT_DIR : PERSONAL_DIR;
-        
-        if (personalInstalled || projectInstalled) {
-            const installedDir = personalInstalled ? PERSONAL_DIR : PROJECT_DIR;
-            log.info('Uninstalling current installation...');
-            if (!DRY_RUN) {
-                await uninstall(installedDir, true, purgeMemory);
-            } else {
-                log.dryRun(`Would uninstall from ${installedDir}`);
-            }
-        }
-        
-        log.info('Installing fresh...');
-        if (!DRY_RUN) {
-            install(targetDir);
-        } else {
-            log.dryRun(`Would install to ${targetDir}`);
-        }
-        process.exit(EXIT_SUCCESS);
-        return;
-    }
-    
-    // Handle uninstall command
+
+    const targetDir = flags.project ? PROJECT_DIR : PERSONAL_DIR;
+
+    if (command === 'status') { showStatus(); process.exit(EXIT_OK); }
+    if (command === 'doctor') { process.exit(doctor()); }
+
     if (command === 'uninstall') {
-        const personalInstalled = isInstalled(PERSONAL_DIR);
-        const projectInstalled = isInstalled(PROJECT_DIR);
-        
-        if (!personalInstalled && !projectInstalled) {
-            log.header('NOTHING TO UNINSTALL');
-            log.info('Droidpartment is not installed anywhere.');
-            log.success('Already clean!');
-            process.exit(EXIT_SUCCESS);
-            return;
-        }
-        
-        let targetDir;
-        if (autoYes) {
-            targetDir = forceProject ? PROJECT_DIR : (personalInstalled ? PERSONAL_DIR : PROJECT_DIR);
-        } else if (personalInstalled && projectInstalled) {
-            console.log('Droidpartment found in both locations:');
-            console.log('');
-            console.log(`  ${COLORS.green}1${COLORS.reset}) Personal (${PERSONAL_DIR})`);
-            console.log(`  ${COLORS.yellow}2${COLORS.reset}) Project (${PROJECT_DIR})`);
-            console.log(`  ${COLORS.red}3${COLORS.reset}) Both`);
-            console.log('');
-            const choice = await prompt('Which to uninstall? [1/2/3]', '1');
-            if (choice === '3') {
-                if (!DRY_RUN) {
-                    await uninstall(PERSONAL_DIR, autoYes, purgeMemory);
-                    await uninstall(PROJECT_DIR, autoYes, purgeMemory);
-                } else {
-                    log.dryRun('Would uninstall from both locations');
-                }
-                process.exit(EXIT_SUCCESS);
-                return;
-            }
-            targetDir = choice === '2' ? PROJECT_DIR : PERSONAL_DIR;
-        } else {
-            targetDir = personalInstalled ? PERSONAL_DIR : PROJECT_DIR;
-            log.info(`Found installation in: ${targetDir}`);
-        }
-        
-        if (!DRY_RUN) {
-            await uninstall(targetDir, autoYes, purgeMemory);
-        } else {
-            log.dryRun(`Would uninstall from ${targetDir}`);
-        }
-        process.exit(EXIT_SUCCESS);
-        return;
-    }
-    
-    // Check for existing installation
-    const personalInstalled = getInstalledVersion(PERSONAL_DIR);
-    const projectInstalled = getInstalledVersion(PROJECT_DIR);
-    
-    // Determine target and action
-    let targetDir;
-    let action = 'install'; // install, update, or skip
-    
-    if (personalInstalled || projectInstalled) {
-        // Existing installation found
-        const installedDir = personalInstalled ? PERSONAL_DIR : PROJECT_DIR;
-        const installedVersion = personalInstalled || projectInstalled;
-        
-        log.header('EXISTING INSTALLATION DETECTED');
-        console.log(`${COLORS.bright}Installed:${COLORS.reset} v${installedVersion} in ${installedDir}`);
-        console.log(`${COLORS.bright}Available:${COLORS.reset} v${CURRENT_VERSION}`);
-        console.log('');
-        
-        const versionCompare = compareVersions(CURRENT_VERSION, installedVersion);
-        
-        if (versionCompare > 0) {
-            // Newer version available
-            log.info(`${COLORS.green}Update available!${COLORS.reset}`);
-            console.log('');
-            
-            if (autoYes || forceUpdate) {
-                targetDir = installedDir;
-                action = 'update';
-            } else {
-                console.log('What would you like to do?');
-                console.log('');
-                console.log(`  ${COLORS.green}1${COLORS.reset}) Update to v${CURRENT_VERSION} ${COLORS.cyan}← recommended${COLORS.reset}`);
-                console.log(`  ${COLORS.yellow}2${COLORS.reset}) Reinstall (fresh install)`);
-                console.log(`  ${COLORS.red}3${COLORS.reset}) Cancel`);
-                console.log('');
-                const choice = await prompt('Select option [1/2/3]', '1');
-                
-                if (choice === '1') {
-                    targetDir = installedDir;
-                    action = 'update';
-                } else if (choice === '2') {
-                    await uninstall(installedDir, autoYes, purgeMemory);
-                    targetDir = installedDir;
-                    action = 'install';
-                } else {
-                    log.info('Cancelled.');
-                    return;
-                }
-            }
-        } else if (versionCompare === 0) {
-            // Same version
-            log.success('Already up to date!');
-            console.log('');
-            
-            if (forceUpdate) {
-                // Force refresh even with same version
-                log.info('Force update requested - refreshing files...');
-                targetDir = installedDir;
-                action = 'update';
-            } else if (!autoYes) {
-                console.log('What would you like to do?');
-                console.log('');
-                console.log(`  ${COLORS.green}1${COLORS.reset}) Exit (already installed)`);
-                console.log(`  ${COLORS.yellow}2${COLORS.reset}) Reinstall (refresh files)`);
-                console.log(`  ${COLORS.red}3${COLORS.reset}) Uninstall`);
-                console.log('');
-                const choice = await prompt('Select option [1/2/3]', '1');
-                
-                if (choice === '2') {
-                    targetDir = installedDir;
-                    action = 'update';
-                } else if (choice === '3') {
-                    await uninstall(installedDir, autoYes, purgeMemory);
-                    return;
-                } else {
-                    log.info('No changes made.');
-                    return;
-                }
-            } else {
-                log.info('No changes needed.');
-                return;
-            }
-        } else {
-            // Older version in package (shouldn't happen normally)
-            log.warn('Installed version is newer than package version.');
-            log.info('Run with --update to force refresh.');
-            return;
-        }
-    } else {
-        // Fresh install
-        log.header('DROIDPARTMENT INSTALLER');
-        showAgentList();
-        
-        if (autoYes) {
-            targetDir = forceProject ? PROJECT_DIR : PERSONAL_DIR;
-            log.info(`Auto-installing to: ${targetDir}`);
-        } else {
-            console.log('Where would you like to install?');
-            console.log('');
-            console.log(`  ${COLORS.green}1${COLORS.reset}) Personal (${PERSONAL_DIR}) ${COLORS.cyan}← recommended${COLORS.reset}`);
-            console.log('     Works in ALL projects automatically');
-            console.log('');
-            console.log(`  ${COLORS.yellow}2${COLORS.reset}) Project (${PROJECT_DIR})`);
-            console.log('     Only this project, can commit to git');
-            console.log('');
-            
-            const choice = await prompt('Select option [1/2]', '1');
-            targetDir = choice === '2' ? PROJECT_DIR : PERSONAL_DIR;
-        }
-        action = 'install';
+        const ok = uninstall(targetDir, flags.purge);
+        process.exit(ok ? EXIT_OK : EXIT_ERROR);
     }
 
-    log.info(`Target: ${targetDir}`);
-    
-    // Execute action
-    if (action === 'update') {
-        const installedVersion = getInstalledVersion(targetDir);
-        update(targetDir, installedVersion);
+    if (command === 'reinstall') {
+        if (isInstalled(targetDir)) uninstall(targetDir, flags.purge);
+        const ok = install(targetDir);
+        process.exit(ok ? EXIT_OK : EXIT_ERROR);
+    }
+
+    // default / install / update
+    const installed = getInstalledVersion(targetDir);
+    if (!installed) {
+        const ok = install(targetDir);
+        process.exit(ok ? EXIT_OK : EXIT_ERROR);
+    }
+
+    const cmp = compareVersions(CURRENT_VERSION, installed);
+    if (cmp > 0 || flags.force || command === 'update') {
+        log.info(`updating ${installed} -> ${CURRENT_VERSION}`);
+        const ok = install(targetDir);
+        process.exit(ok ? EXIT_OK : EXIT_ERROR);
+    } else if (cmp === 0) {
+        log.ok(`already up to date (v${installed})`);
+        process.exit(EXIT_OK);
     } else {
-        install(targetDir);
+        log.warn(`installed v${installed} is newer than package v${CURRENT_VERSION}`);
+        process.exit(EXIT_OK);
     }
 }
 
 main().catch(err => {
-    log.error(`Failed: ${err.message}`);
-    process.exit(1);
+    log.err(err.message || String(err));
+    if (VERBOSITY >= 2 && err.stack) console.error(err.stack);
+    process.exit(EXIT_ERROR);
 });

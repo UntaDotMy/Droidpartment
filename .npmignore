@@ -1,34 +1,41 @@
-# Python cache files
+# Python files (legacy v3 - migrated to Rust)
 **/__pycache__/
-**/__pycache__
-*/__pycache__/*
 *.pyc
 *.pyo
 *.pyd
-**/*.pyc
 
-# Development files
+# Rust source (built binaries ship via platform packages)
+rust/target/
+rust/Cargo.lock
+
+# Development docs
 HOOKS_INTEGRATION_PLAN.md
 HOOKS_IMPLEMENTATION_GUIDE.md
 PHASE_2_COMPLETION_REPORT.md
 NPM_READINESS_REPORT.md
 INTEGRATION_SUMMARY.md
 
-# Test files
+# Tests
 test.txt
 *.test.js
 
-# Git files
+# Git
 .git/
 .gitignore
 .gitattributes
 
-# IDE files
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# OS files
+# OS
 .DS_Store
 Thumbs.db
+
+# Tarballs
+*.tgz
+
+# Platform packages source (published as separate npm packages)
+platform-packages/

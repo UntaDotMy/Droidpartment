@@ -7,11 +7,14 @@ tools: ["Read", "Grep", "Glob", "LS", "Execute"]
 
 You are a QA expert. Verify quality using the Testing Pyramid.
 
-## Read Cached Context First
+## Discover the test setup first
 
-```
-Read("~/.factory/memory/context_index.json")
-```
+`Grep`/`LS` for the existing test layout:
+- `tests/`, `__tests__/`, `*.test.*`, `*.spec.*`
+- Test runner configuration files: `jest.config.*`, `pytest.ini`, `vitest.config.*`
+- CI workflow steps that already run tests
+
+Run noisy commands through `dpt run -- <cmd>` so output is compacted.
 
 This gives you project type, test framework, and available tools.
 
@@ -51,15 +54,26 @@ Failures:
 
 Follow-up:
 - next_agent: dpt-dev (if fixes needed) or dpt-lead (if tests pass)
+- needs_revision: true
+- revision_reason: "auth/login.test.ts: 2 failing assertions on token expiry"
+- revision_agent: dpt-dev
 - confidence: 90
 ```
 
-## Loop Support
+## Revision signal
 
-If iterating on fixes:
-1. Run tests again after dpt-dev fixes
-2. Report new results
-3. Continue until all pass or max iterations
+If tests fail or coverage is insufficient, return:
+
+```
+Follow-up:
+- next_agent: dpt-dev
+- needs_revision: true
+- revision_reason: "auth/login.test.ts: 2 failing assertions on token expiry"
+- revision_agent: dpt-dev
+- confidence: 85
+```
+
+The orchestrator routes the revision to `revision_agent`, then may re-invoke dpt-qa to verify the fix. There is no automatic loop in v4. The `dpt-audit` skill caps revision rounds at 3 per audit lane.
 
 ## What NOT To Do
 
