@@ -1,6 +1,6 @@
 {
   "name": "droidpartment",
-  "version": "4.0.1",
+  "version": "4.0.2",
   "description": "Token-saving multi-agent orchestration for Factory AI Droid CLI. Native Rust compactor, auto-rewrite hooks, 18 expert sub-droids, learning memory.",
   "author": "Nasri",
   "license": "MIT",
@@ -48,10 +48,10 @@
     "node": ">=16.0.0"
   },
   "optionalDependencies": {
-    "@untadotmy/cli-darwin-arm64": "4.0.1",
-    "@untadotmy/cli-darwin-x64": "4.0.1",
-    "@untadotmy/cli-linux-arm64": "4.0.1",
-    "@untadotmy/cli-linux-x64": "4.0.1",
-    "@untadotmy/cli-win32-x64": "4.0.1"
+    "droidpartment-cli-darwin-arm64": "4.0.2",
+    "droidpartment-cli-darwin-x64": "4.0.2",
+    "droidpartment-cli-linux-arm64": "4.0.2",
+    "droidpartment-cli-linux-x64": "4.0.2",
+    "droidpartment-cli-win32-x64": "4.0.2"
   }
 }

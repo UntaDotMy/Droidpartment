@@ -121,7 +121,7 @@ jobs:
           generate_release_notes: true
 
   publish-platform-pkgs:
-    name: publish @untadotmy/cli-${{ matrix.platform_pkg }}
+    name: publish droidpartment-cli-${{ matrix.platform_pkg }}
     needs: release
     runs-on: ubuntu-latest
     permissions:
@@ -186,7 +186,7 @@ jobs:
           fi
           cat > "platform-packages/cli-${PLATFORM}/package.json" <<EOF
           {
-            "name": "@untadotmy/cli-${PLATFORM}",
+            "name": "droidpartment-cli-${PLATFORM}",
             "version": "${VERSION}",
             "description": "Droidpartment dpt binary for ${OS}-${CPU}",
             "license": "MIT",

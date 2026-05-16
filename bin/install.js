@@ -117,7 +117,7 @@ function findPlatformBinary() {
     const platform = process.platform; // win32 | darwin | linux
     const arch = process.arch;          // x64 | arm64
     const ext = platform === 'win32' ? '.exe' : '';
-    const pkgName = `@untadotmy/cli-${platform}-${arch}`;
+    const pkgName = `droidpartment-cli-${platform}-${arch}`;
 
     // 1. Try resolved optional dependency
     try {

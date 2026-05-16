@@ -10,17 +10,17 @@ platform-packages/cli-<os>-<arch>/
   bin/dpt(.exe)    # built Rust binary copied from cargo target
 ```
 
-Published as `@untadotmy/cli-<os>-<arch>` on npm. The main `droidpartment`
+Published as `droidpartment-cli-<os>-<arch>` on npm. The main `droidpartment`
 package lists them under `optionalDependencies`, so npm picks the right one
 based on the host's `os` and `cpu` constraints.
 
 Supported targets:
 
-- `@untadotmy/cli-darwin-arm64`
-- `@untadotmy/cli-darwin-x64`
-- `@untadotmy/cli-linux-arm64`
-- `@untadotmy/cli-linux-x64`
-- `@untadotmy/cli-win32-x64`
+- `droidpartment-cli-darwin-arm64`
+- `droidpartment-cli-darwin-x64`
+- `droidpartment-cli-linux-arm64`
+- `droidpartment-cli-linux-x64`
+- `droidpartment-cli-win32-x64`
 
 You can also build locally:
 
